@@ -53,10 +53,13 @@ concurrent `process_batch` via `ray.get`.
 | `INGESTION_RAW_TOPIC` | `telemetry.raw` | Source |
 | `INGESTION_NORMALIZED_TOPIC` | `telemetry.normalized` | Destination |
 | `INGESTION_KAFKA_GROUP_ID` | `argus-ingestion` | Consumer group prefix |
-| `RAY_NUM_PARTITIONS` | `4` | Actor pool size |
+| `RAY_NUM_PARTITIONS` | `2` | Actor pool size (keep ≤ CPUs under 2Gi) |
 | `RAY_NUM_CPUS` | `2` | Local Ray CPUs |
+| `RAY_OBJECT_STORE_MEMORY_BYTES` | `268435456` (256MB) | Explicit object-store size for `ray.init` |
+| `RAY_MEMORY_BYTES` | `536870912` (512MB) | Explicit task/actor heap (`_memory`) |
+| `RAY_INCLUDE_DASHBOARD` | `false` | Enable Ray UI (needs more than 2Gi) |
 | `RAY_HEALTH_PORT` | `8092` | `GET /health` |
-| `RAY_DASHBOARD_PORT` | `8265` | Ray dashboard |
+| `RAY_DASHBOARD_PORT` | `8265` | Ray dashboard (only if enabled) |
 
 ## Run standalone
 
@@ -88,6 +91,39 @@ Health: http://localhost:8091/health · http://localhost:8092/health · Ray UI h
 make up   # builds simulator + ray-consumer with 2 CPU / 2Gi limits
 make logs
 ```
+
+## Running in Docker / troubleshooting
+
+Ray inside a **cgroup memory-limited** container (our compose limit is 2Gi) often
+fails at startup with:
+
+```text
+ValueError: ... memory on this node available for tasks and actors (0.0 GB) is less than 0%
+```
+
+**Cause:** `ray.init()` auto-detects available memory from the host/cgroup view and
+can resolve it to `0` under Docker limits. Raising the container limit alone masks
+this on larger machines; it is not the real fix.
+
+**Fix (already applied in this service):**
+
+1. Pass explicit budgets via env (wired into `initialize_ray` → `ray.init`):
+   - `RAY_OBJECT_STORE_MEMORY_BYTES` (default `268435456` / 256MB)
+   - `RAY_MEMORY_BYTES` (default `536870912` / 512MB) → `ray.init(_memory=...)`
+2. Set `shm_size: "1gb"` on the `ray-consumer` service — the object store is backed
+   by `/dev/shm`, and Docker’s default 64MB shm is a common companion failure mode.
+3. Keep `RAY_INCLUDE_DASHBOARD=false` under the 2Gi limit — the dashboard’s
+   multi-process UI can consume ~1GB+ by itself and trigger Ray’s OOM killer
+   even after (1)+(2). Enable only if you raise the container memory.
+4. Default `RAY_NUM_PARTITIONS=2` so actor workers fit beside Ray’s GCS/raylet.
+
+Tune the memory env vars if you change the container limit; keep
+`object_store + _memory` comfortably under the cgroup cap (leave headroom for the
+Python process, Kafka clients, and Ray system daemons). Do **not** treat a higher
+memory limit as a substitute for explicit `object_store_memory` / `_memory`.
+
+Progress is logged every ~10s as `ray_consumer_progress` with cumulative
+`consumed` / `published` / `quarantined` counts.
 
 ## Tests
 

@@ -163,14 +163,46 @@ def process_partitions_concurrently(
     return list(ray.get(futures))
 
 
-def initialize_ray(*, num_cpus: int, dashboard_host: str, dashboard_port: int) -> None:
-    ray.init(
-        ignore_reinit_error=True,
-        num_cpus=num_cpus,
-        include_dashboard=True,
-        dashboard_host=dashboard_host,
-        dashboard_port=dashboard_port,
-        logging_level=logging.WARNING,
+def initialize_ray(
+    *,
+    num_cpus: int,
+    dashboard_host: str,
+    dashboard_port: int,
+    object_store_memory: int,
+    memory: int,
+    include_dashboard: bool = False,
+) -> None:
+    """
+    Start a local Ray node with explicit memory budgets.
+
+    Inside cgroup-limited Docker containers Ray's auto memory detection often
+    resolves available memory to 0 and refuses to start. Pass explicit
+    ``object_store_memory`` and ``_memory`` instead of relying on fractions.
+
+    The Ray dashboard is disabled by default under Docker: its multi-process
+    UI stack alone can exceed a 2Gi cgroup before any actors start.
+    """
+    logger.info(
+        "ray_init",
+        extra={
+            "num_cpus": num_cpus,
+            "object_store_memory": object_store_memory,
+            "memory": memory,
+            "include_dashboard": include_dashboard,
+            "dashboard_port": dashboard_port,
+        },
     )
-    # Brief pause so dashboard binds before health reports ready.
+    init_kwargs: dict[str, Any] = {
+        "ignore_reinit_error": True,
+        "num_cpus": num_cpus,
+        "include_dashboard": include_dashboard,
+        "object_store_memory": object_store_memory,
+        "_memory": memory,
+        "logging_level": logging.WARNING,
+    }
+    if include_dashboard:
+        init_kwargs["dashboard_host"] = dashboard_host
+        init_kwargs["dashboard_port"] = dashboard_port
+    ray.init(**init_kwargs)
+    # Brief pause so dashboard (if enabled) binds before health reports ready.
     time.sleep(0.5)

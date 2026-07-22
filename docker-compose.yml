@@ -111,15 +111,23 @@ services:
       context: .
       dockerfile: ingestion/ray_consumer/Dockerfile
     container_name: argus-ray-consumer
+    # Ray object store is backed by /dev/shm; Docker's default 64MB shm is too small.
+    shm_size: "1gb"
     environment:
       KAFKA_BROKERS: redpanda:9092
       SCHEMA_REGISTRY_URL: http://redpanda:8081
       INGESTION_RAW_TOPIC: telemetry.raw
       INGESTION_NORMALIZED_TOPIC: telemetry.normalized
       INGESTION_KAFKA_GROUP_ID: argus-ingestion
-      RAY_NUM_PARTITIONS: ${RAY_NUM_PARTITIONS:-4}
+      # 2 actors fits a 2Gi cgroup; raise with memory if you scale partitions.
+      RAY_NUM_PARTITIONS: ${RAY_NUM_PARTITIONS:-2}
       RAY_NUM_CPUS: ${RAY_NUM_CPUS:-2}
       RAY_BATCH_SIZE: ${RAY_BATCH_SIZE:-50}
+      # Explicit budgets — do not rely on Ray auto-detection under cgroup limits.
+      RAY_OBJECT_STORE_MEMORY_BYTES: ${RAY_OBJECT_STORE_MEMORY_BYTES:-268435456}
+      RAY_MEMORY_BYTES: ${RAY_MEMORY_BYTES:-536870912}
+      # Dashboard multi-process UI exceeds 2Gi alone; enable only with more memory.
+      RAY_INCLUDE_DASHBOARD: ${RAY_INCLUDE_DASHBOARD:-false}
       RAY_HEALTH_PORT: "8092"
       RAY_DASHBOARD_HOST: "0.0.0.0"
       RAY_DASHBOARD_PORT: "8265"

@@ -56,7 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--partitions",
         type=int,
-        default=int(os.getenv("RAY_NUM_PARTITIONS", "4")),
+        default=int(os.getenv("RAY_NUM_PARTITIONS", "2")),
         help="Number of DataStreamer actors (vehicle/camera partitions)",
     )
     p.add_argument(
@@ -87,6 +87,25 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=int(os.getenv("RAY_DASHBOARD_PORT", "8265")),
     )
+    p.add_argument(
+        "--include-dashboard",
+        action=argparse.BooleanOptionalAction,
+        default=os.getenv("RAY_INCLUDE_DASHBOARD", "false").lower()
+        in {"1", "true", "yes", "on"},
+        help="Enable Ray dashboard (memory-heavy; off by default in Docker)",
+    )
+    p.add_argument(
+        "--object-store-memory",
+        type=int,
+        default=int(os.getenv("RAY_OBJECT_STORE_MEMORY_BYTES", str(256 * 1024 * 1024))),
+        help="Ray object store bytes (explicit; required under cgroup memory limits)",
+    )
+    p.add_argument(
+        "--memory",
+        type=int,
+        default=int(os.getenv("RAY_MEMORY_BYTES", str(512 * 1024 * 1024))),
+        help="Ray task/actor heap bytes passed as ray.init(_memory=...)",
+    )
     return p
 
 
@@ -106,6 +125,9 @@ def run(args: argparse.Namespace) -> int:
         num_cpus=args.num_cpus,
         dashboard_host=args.dashboard_host,
         dashboard_port=args.dashboard_port,
+        object_store_memory=args.object_store_memory,
+        memory=args.memory,
+        include_dashboard=args.include_dashboard,
     )
     partition_ids = [f"partition-{i}" for i in range(args.partitions)]
     streamers = create_streamer_pool(
@@ -124,15 +146,28 @@ def run(args: argparse.Namespace) -> int:
             "source_topic": args.source_topic,
             "dest_topic": args.dest_topic,
             "dashboard_port": args.dashboard_port,
+            "include_dashboard": args.include_dashboard,
             "health_port": args.health_port,
+            "object_store_memory": args.object_store_memory,
+            "memory": args.memory,
         },
     )
 
+    last_status_log = 0.0
     try:
         while not _shutdown.is_set():
-            results = process_partitions_concurrently(
-                streamers, max_messages=args.batch_size
-            )
+            try:
+                results = process_partitions_concurrently(
+                    streamers, max_messages=args.batch_size
+                )
+            except Exception as exc:  # noqa: BLE001 — keep the service alive
+                _aggregate_stats["errors"] += 1
+                logger.exception(
+                    "ray_consumer_round_failed",
+                    extra={"error": str(exc), "rounds": _aggregate_stats["rounds"]},
+                )
+                time.sleep(2.0)
+                continue
             _aggregate_stats["rounds"] += 1
             for row in results:
                 for key in ("consumed", "published", "quarantined", "errors"):
@@ -140,6 +175,21 @@ def run(args: argparse.Namespace) -> int:
                     _aggregate_stats[key] = max(
                         _aggregate_stats[key], int(row.get(key, 0))
                     )
+            now = time.monotonic()
+            if now - last_status_log >= 10.0:
+                logger.info(
+                    "ray_consumer_progress",
+                    extra={
+                        "consumed": _aggregate_stats["consumed"],
+                        "published": _aggregate_stats["published"],
+                        "quarantined": _aggregate_stats["quarantined"],
+                        "errors": _aggregate_stats["errors"],
+                        "rounds": _aggregate_stats["rounds"],
+                        "source_topic": args.source_topic,
+                        "dest_topic": args.dest_topic,
+                    },
+                )
+                last_status_log = now
             time.sleep(0.25)
     finally:
         for streamer in streamers:
