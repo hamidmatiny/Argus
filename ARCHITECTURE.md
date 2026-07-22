@@ -18,7 +18,7 @@ This document describes the system design for ARGUS: responsibilities, data cont
 | **Kafka / Redpanda** | Durable, ordered bus between producers and processors |
 | **ingestion (Ray)** | Simulator publishes Avro to `telemetry.raw`; Ray DataStreamer actors normalize to `telemetry.normalized` |
 | **stream-processor (Flink / local)** | Streaming QA gate: Pandera-equivalent checks → `telemetry.validated` / `telemetry.quarantine` / `telemetry.qa_metrics` |
-| **lakehouse (Iceberg)** | Bronze → silver → gold tables; time travel; compaction |
+| **lakehouse (Iceberg)** | Kafka → Iceberg (`fleet.telemetry`, `fleet.quarantine`) via REST/Glue + MinIO/S3; Trino SQL |
 | **orchestration (Dagster)** | Assets, schedules, sensors; ties lakehouse to ML and drift jobs |
 | **drift-monitor** | KS + embedding + Evidently on `telemetry.validated`; publish `IncidentEvent` to `incidents.raw` |
 | **incident-engine** | Correlate QA/drift/SLO signals into incidents |
@@ -36,7 +36,7 @@ This document describes the system design for ARGUS: responsibilities, data cont
    - pass → `telemetry.validated`
    - fail → `telemetry.quarantine` (structured DLQ: field, rule, raw payload)
    - tumbling per-vehicle quarantine rate → `telemetry.qa_metrics`
-4. Validated events land in Iceberg bronze/silver; Dagster materializes gold assets and ML jobs.
+4. `lakehouse-writer` appends `telemetry.validated` to Iceberg `fleet.telemetry` (partitioned by `device_type` + day); `lakehouse-dlq-writer` archives `telemetry.quarantine` to `fleet.quarantine`. Query via Trino. Dagster (later) materializes gold assets and ML jobs.
 5. `drift-monitor` consumes `telemetry.validated` in parallel (KS/Evidently vs golden baseline) and publishes `IncidentEvent` to `incidents.raw` when ≥ N features drift; incident-engine correlates with QA metrics and SLO breaches.
 6. Observability scrapes/receives OTel; dashboard and ai-copilot read via api-gateway.
 
@@ -48,12 +48,17 @@ This document describes the system design for ARGUS: responsibilities, data cont
                                            /        |         \
                                           v         v          v
                                    validated   quarantine   qa_metrics
-                                      │  \
-                                      │   └──► [drift-monitor] → incidents.raw
-                                      ▼                              │
-                                 [Iceberg] → [Dagster]               │
-                                                     \               ▼
-                                                      [incident-engine]
+                                    /    |  \         \
+                                   /     |   \         └──► [dlq-writer] → fleet.quarantine
+                                  v      |    v
+                    [lakehouse-writer]   |  [drift-monitor] → incidents.raw
+                            │            |                         │
+                            v            |                         v
+                     fleet.telemetry     |                  [incident-engine]
+                            │            |
+                         [Trino] ←——— Iceberg REST + MinIO/S3
+                            │
+                         [Dagster]
                                                           ↙         ↘
                                                [observability]   [dashboard]
                                                           ↖         ↗

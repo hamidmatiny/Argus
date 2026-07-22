@@ -62,3 +62,6 @@ stream-processor/.venv/
 # Drift-monitor local venv + generated Evidently HTML
 drift-monitor/.venv/
 drift-monitor/reports/*.html
+
+# Lakehouse local venv
+lakehouse/.venv/

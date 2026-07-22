@@ -244,10 +244,187 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Phase — lakehouse (Iceberg catalog / compute deps) (placeholder)
+  # Phase 5 — lakehouse (MinIO + Iceberg REST + Trino + writers)
   # ---------------------------------------------------------------------------
-  # lakehouse-catalog: ...
-  # lakehouse-query: ...
+  minio:
+    image: minio/minio:latest
+    container_name: argus-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-password}
+      MINIO_DOMAIN: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      default:
+        aliases:
+          - warehouse.minio
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 10s
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: argus-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 $${MINIO_ROOT_USER:-admin} $${MINIO_ROOT_PASSWORD:-password}; do sleep 1; done;
+      mc mb --ignore-existing local/warehouse;
+      mc anonymous set download local/warehouse;
+      echo minio warehouse ready;
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-password}
+    restart: "no"
+
+  iceberg-rest:
+    image: tabulario/iceberg-rest:1.6.0
+    container_name: argus-iceberg-rest
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-admin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-password}
+      AWS_REGION: us-east-1
+      CATALOG_WAREHOUSE: s3://warehouse/
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      CATALOG_S3_ENDPOINT: http://minio:9000
+      CATALOG_S3_PATH__STYLE__ACCESS: "true"
+      CATALOG_CLIENT__REGION: us-east-1
+    ports:
+      - "8181:8181"
+    depends_on:
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  trino:
+    image: trinodb/trino:455
+    container_name: argus-trino
+    ports:
+      # Host 8089 — 8080 is commonly taken locally; container still listens on 8080.
+      - "8089:8080"
+    volumes:
+      - ./lakehouse/catalog/trino/catalog:/etc/trino/catalog:ro
+    depends_on:
+      - iceberg-rest
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/v1/info || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+
+  lakehouse-writer:
+    build:
+      context: .
+      dockerfile: lakehouse/Dockerfile
+    container_name: argus-lakehouse-writer
+    command: ["python", "/app/lakehouse/writer/main.py"]
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      SCHEMA_REGISTRY_URL: http://redpanda:8081
+      LAKEHOUSE_VALIDATED_TOPIC: telemetry.validated
+      LAKEHOUSE_WRITER_GROUP_ID: argus-lakehouse-writer
+      ICEBERG_CATALOG_TYPE: rest
+      ICEBERG_CATALOG_URI: http://iceberg-rest:8181
+      ICEBERG_WAREHOUSE: s3://warehouse/
+      ICEBERG_NAMESPACE: fleet
+      ICEBERG_TELEMETRY_TABLE: telemetry
+      S3_ENDPOINT: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-admin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-password}
+      AWS_REGION: us-east-1
+      S3_PATH_STYLE_ACCESS: "true"
+      LAKEHOUSE_BATCH_SIZE: ${LAKEHOUSE_BATCH_SIZE:-50}
+      LAKEHOUSE_FLUSH_INTERVAL_SEC: ${LAKEHOUSE_FLUSH_INTERVAL_SEC:-5}
+      LAKEHOUSE_WRITER_HEALTH_PORT: "8096"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ARGUS_AVRO_SCHEMA_PATH: /app/shared/avro/telemetry_event.avsc
+    ports:
+      - "8096:8096"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      stream-processor:
+        condition: service_healthy
+      iceberg-rest:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8096/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    restart: unless-stopped
+
+  lakehouse-dlq-writer:
+    build:
+      context: .
+      dockerfile: lakehouse/Dockerfile
+    container_name: argus-lakehouse-dlq-writer
+    command: ["python", "/app/lakehouse/dlq_writer/main.py"]
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      LAKEHOUSE_QUARANTINE_TOPIC: telemetry.quarantine
+      LAKEHOUSE_DLQ_GROUP_ID: argus-lakehouse-dlq-writer
+      ICEBERG_CATALOG_TYPE: rest
+      ICEBERG_CATALOG_URI: http://iceberg-rest:8181
+      ICEBERG_WAREHOUSE: s3://warehouse/
+      ICEBERG_NAMESPACE: fleet
+      ICEBERG_QUARANTINE_TABLE: quarantine
+      S3_ENDPOINT: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-admin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-password}
+      AWS_REGION: us-east-1
+      S3_PATH_STYLE_ACCESS: "true"
+      LAKEHOUSE_BATCH_SIZE: ${LAKEHOUSE_BATCH_SIZE:-50}
+      LAKEHOUSE_FLUSH_INTERVAL_SEC: ${LAKEHOUSE_FLUSH_INTERVAL_SEC:-5}
+      LAKEHOUSE_DLQ_HEALTH_PORT: "8097"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8097:8097"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      stream-processor:
+        condition: service_healthy
+      iceberg-rest:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8097/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 768M
+    restart: unless-stopped
 
   # ---------------------------------------------------------------------------
   # Phase — orchestration (Dagster) (placeholder)
@@ -337,3 +514,4 @@ services:
 
 volumes:
   redpanda-data:
+  minio-data:

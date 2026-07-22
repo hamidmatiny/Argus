@@ -1,6 +1,6 @@
 # ARGUS — root developer targets
 
-.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test register-avro logs help
+.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test register-avro logs help
 
 COMPOSE ?= docker compose
 BUF ?= buf
@@ -18,6 +18,9 @@ STREAM_PIP := $(STREAM_VENV)/bin/pip
 DRIFT_DIR := drift-monitor
 DRIFT_VENV := $(DRIFT_DIR)/.venv
 DRIFT_PIP := $(DRIFT_VENV)/bin/pip
+LAKE_DIR := lakehouse
+LAKE_VENV := $(LAKE_DIR)/.venv
+LAKE_PIP := $(LAKE_VENV)/bin/pip
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?##"}; {printf "  %-22s %s\n", $$1, $$2}'
@@ -31,7 +34,7 @@ down: ## Stop local stack
 logs: ## Follow compose logs
 	$(COMPOSE) logs -f
 
-test: contracts-test ingestion-test stream-processor-test drift-monitor-test ## Fan-out tests
+test: contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test ## Fan-out tests
 	@echo "==> test: Go modules (go.work)"
 	@if command -v go >/dev/null 2>&1; then \
 		go work sync 2>/dev/null || true; \
@@ -105,6 +108,16 @@ drift-monitor-test: $(DRIFT_VENV)/bin/pytest ## KS/Evidently drift + incident pu
 	cd $(DRIFT_DIR) && \
 		PYTHONPATH=.:.. ARGUS_AVRO_SCHEMA_PATH=../shared/avro/telemetry_event.avsc \
 		KAFKA_BROKERS=$${KAFKA_BROKERS:-localhost:19092} \
+		.venv/bin/pytest -q
+
+$(LAKE_VENV)/bin/pytest: $(LAKE_DIR)/requirements.txt
+	$(PYTHON) -m venv $(LAKE_VENV)
+	$(LAKE_PIP) install -U pip
+	$(LAKE_PIP) install -r $(LAKE_DIR)/requirements.txt
+
+lakehouse-test: $(LAKE_VENV)/bin/pytest ## Iceberg schema mapping + sqlite catalog appends
+	cd $(LAKE_DIR) && \
+		PYTHONPATH=.:.. \
 		.venv/bin/pytest -q
 
 register-avro: ## Register TelemetryEvent Avro schema with local Schema Registry
