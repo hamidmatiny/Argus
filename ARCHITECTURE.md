@@ -17,7 +17,7 @@ This document describes the system design for ARGUS: responsibilities, data cont
 | **Fleet devices / SDKs** | Emit typed telemetry events (metrics, logs, edge features) to Kafka topics |
 | **Kafka / Redpanda** | Durable, ordered bus between producers and processors |
 | **ingestion (Ray)** | Simulator publishes Avro to `telemetry.raw`; Ray DataStreamer actors normalize to `telemetry.normalized` |
-| **stream-processor (Flink)** | Streaming QA gate: schema, ranges, freshness, quarantine |
+| **stream-processor (Flink / local)** | Streaming QA gate: Pandera-equivalent checks → `telemetry.validated` / `telemetry.quarantine` / `telemetry.qa_metrics` |
 | **lakehouse (Iceberg)** | Bronze → silver → gold tables; time travel; compaction |
 | **orchestration (Dagster)** | Assets, schedules, sensors; ties lakehouse to ML and drift jobs |
 | **drift-monitor** | Compare live vs baseline distributions; emit drift signals |
@@ -32,23 +32,31 @@ This document describes the system design for ARGUS: responsibilities, data cont
 
 1. `ingestion/simulator` (or devices / `sdk/*`) publish to Kafka topic `telemetry.raw`.
 2. Ray ingestion (`DataStreamer` actor pool) consumes, normalizes, and republishes to `telemetry.normalized`.
-3. Flink QA enforces contracts; failures go to quarantine topics; passes land in Iceberg bronze/silver.
-4. Dagster materializes gold assets, training/eval jobs, and triggers drift evaluations.
-5. drift-monitor writes findings; incident-engine correlates with QA and SLO breaches.
+3. `stream-processor` QA gate (PyFlink or `--engine=local`) validates each record:
+   - pass → `telemetry.validated`
+   - fail → `telemetry.quarantine` (structured DLQ: field, rule, raw payload)
+   - tumbling per-vehicle quarantine rate → `telemetry.qa_metrics`
+4. Validated events land in Iceberg bronze/silver; Dagster materializes gold assets and ML jobs.
+5. drift-monitor writes findings; incident-engine correlates with QA metrics and SLO breaches.
 6. Observability scrapes/receives OTel; dashboard and ai-copilot read via api-gateway.
 
 ```text
-[devices] → [Kafka] → [Ray] → [Flink QA] → [Iceberg]
-                                              ↓
-                                         [Dagster]
-                                              ↓
-                                       [drift-monitor]
-                                              ↓
-                                      [incident-engine]
-                                         ↙         ↘
-                              [observability]    [dashboard]
-                                         ↖         ↗
-                                          [ai-copilot]
+[devices/simulator] → telemetry.raw → [Ray] → telemetry.normalized
+                                                    │
+                                                    ▼
+                                          [stream-processor QA]
+                                           /        |         \
+                                          v         v          v
+                                   validated   quarantine   qa_metrics
+                                          │
+                                          ▼
+                                     [Iceberg] → [Dagster] → [drift-monitor]
+                                                                    │
+                                                             [incident-engine]
+                                                                ↙         ↘
+                                                     [observability]   [dashboard]
+                                                                ↖         ↗
+                                                                 [ai-copilot]
 ```
 
 ## Data contracts
@@ -57,7 +65,7 @@ Contracts live under `shared/` (schemas evolve in Phase 1+). Design principles:
 
 - **Envelope**: every event has `event_id`, `device_id`, `schema_version`, `event_time`, `ingest_time`, `payload`.
 - **Versioned schemas**: Avro or Protobuf + JSON Schema for API edges; incompatible changes require a new major `schema_version`.
-- **Topics**: `telemetry.raw.<domain>`, `telemetry.quarantine.<domain>`, `telemetry.clean.<domain>`, `signals.drift`, `signals.incidents`.
+- **Topics**: `telemetry.raw`, `telemetry.normalized`, `telemetry.validated`, `telemetry.quarantine`, `telemetry.qa_metrics`, `signals.drift`, `signals.incidents`.
 - **Iceberg**: bronze = raw-ish append; silver = validated/typed; gold = aggregates and feature tables for ML.
 - **API errors**: structured JSON problem details from api-gateway; no free-form strings as the sole error channel.
 
@@ -83,7 +91,8 @@ Exact IDL files are intentionally deferred to Phase 1 (`make proto` will generat
 - **Entry point:** `make up` → `docker compose up -d --build`
 - **Phase 0–1:** Redpanda + Schema Registry / Console
 - **Phase 2:** `simulator` + `ray-consumer` (see `ingestion/`)
-- **Later phases:** Flink, lakehouse deps, Dagster, drift, incident-engine, gateway, OTel, dashboard, copilot (placeholders in compose)
+- **Phase 3:** Flink JobManager/TaskManager + `stream-processor` QA gate
+- **Later phases:** lakehouse deps, Dagster, drift, incident-engine, gateway, OTel, dashboard, copilot (placeholders in compose)
 - **Goal:** a laptop-friendly golden path that exercises contracts without cloud accounts
 
 ### Production (Terraform + EKS + Helm + Argo CD)

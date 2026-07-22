@@ -8,10 +8,13 @@
 flowchart LR
   Sim["ingestion/simulator"] --> Kafka["Kafka / Redpanda"]
   Devices["Fleet devices / SDKs"] --> Kafka
-  Kafka --> Ray["ingestion/ray_consumer<br/>DataStreamer actors"]
-  Ray --> NormTopic["telemetry.normalized"]
-  NormTopic --> Flink["Flink QA gate"]
-  Flink --> Iceberg["Iceberg lakehouse"]
+  Kafka --> Ray["ingestion/ray_consumer"]
+  Ray --> Norm["telemetry.normalized"]
+  Norm --> QA["stream-processor QA<br/>Flink / local"]
+  QA --> Val["telemetry.validated"]
+  QA --> Quar["telemetry.quarantine"]
+  QA --> Metrics["telemetry.qa_metrics"]
+  Val --> Iceberg["Iceberg lakehouse"]
   Iceberg --> Dagster["Dagster orchestration"]
   Dagster --> Drift["drift-monitor"]
   Drift --> Incidents["incident-engine"]
@@ -24,26 +27,24 @@ flowchart LR
 ```
 
 ```text
-ingestion/simulator ──► Kafka/Redpanda (telemetry.raw)
-fleet devices/SDKs  ──┘         │
-                                ▼
-              Ray ingestion (DataStreamer actor pool)
-                                │
-                                ▼
-                      telemetry.normalized
-                                │
-                                ▼
- Flink QA gate ──► Iceberg lakehouse ──► Dagster orchestration
-                                                │
-                                                ▼
-                                         drift-monitor
-                                                │
-                                                ▼
-                                         incident-engine
-                                                │
-                      ┌─────────────────────────┼─────────────────────────┐
-                      ▼                         ▼                         ▼
-                observability               dashboard                 ai-copilot
+ingestion/simulator ──► telemetry.raw
+fleet devices/SDKs  ──┘       │
+                              ▼
+              Ray ingestion (DataStreamer actors)
+                              │
+                              ▼
+                    telemetry.normalized
+                              │
+                              ▼
+              stream-processor QA (Flink | local)
+                     │            │            │
+                     ▼            ▼            ▼
+           telemetry.validated  quarantine  qa_metrics
+                     │
+                     ▼
+              Iceberg ──► Dagster ──► drift-monitor ──► incident-engine
+                                                              │
+                                         observability / dashboard / ai-copilot
 ```
 
 ## Monorepo layout
@@ -52,7 +53,7 @@ fleet devices/SDKs  ──┘         │
 |------|----------|---------|-------|
 | `shared/` | Multi | Contracts, schemas, shared libs | Phase 1 |
 | `ingestion/` | Python (Ray) | Simulator + Ray consumer (raw → normalized) | Phase 2 |
-| `stream-processor/` | Java/Python (Flink) | Streaming data-quality gate | Later |
+| `stream-processor/` | Python (PyFlink + local) | QA gate → validated / quarantine / qa_metrics | Phase 3 |
 | `drift-monitor/` | Python | Feature/prediction drift detection | Later |
 | `lakehouse/` | SQL/Python | Iceberg tables and catalog layout | Later |
 | `orchestration/` | Python (Dagster) | Asset jobs, sensors, ML lifecycle | Later |

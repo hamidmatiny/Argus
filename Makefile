@@ -1,6 +1,6 @@
 # ARGUS — root developer targets
 
-.PHONY: up down test lint proto contracts-test ingestion-test register-avro logs help
+.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test register-avro logs help
 
 COMPOSE ?= docker compose
 BUF ?= buf
@@ -11,9 +11,12 @@ CONTRACTS_PIP := $(CONTRACTS_VENV)/bin/pip
 INGESTION_DIR := ingestion
 INGESTION_VENV := $(INGESTION_DIR)/.venv
 INGESTION_PIP := $(INGESTION_VENV)/bin/pip
+STREAM_DIR := stream-processor
+STREAM_VENV := $(STREAM_DIR)/.venv
+STREAM_PIP := $(STREAM_VENV)/bin/pip
 
 help: ## Show targets
-	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?##"}; {printf "  %-16s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?##"}; {printf "  %-22s %s\n", $$1, $$2}'
 
 up: ## Start local stack (docker compose up -d --build)
 	$(COMPOSE) up -d --build
@@ -24,7 +27,7 @@ down: ## Stop local stack
 logs: ## Follow compose logs
 	$(COMPOSE) logs -f
 
-test: contracts-test ingestion-test ## Fan-out tests
+test: contracts-test ingestion-test stream-processor-test ## Fan-out tests
 	@echo "==> test: Go modules (go.work)"
 	@if command -v go >/dev/null 2>&1; then \
 		go work sync 2>/dev/null || true; \
@@ -77,6 +80,16 @@ $(INGESTION_VENV)/bin/pytest: $(INGESTION_DIR)/requirements.txt
 ingestion-test: $(INGESTION_VENV)/bin/pytest ## Simulator + Ray normalization tests
 	cd $(INGESTION_DIR) && \
 		PYTHONPATH=.. ARGUS_AVRO_SCHEMA_PATH=../shared/avro/telemetry_event.avsc \
+		.venv/bin/pytest -q
+
+$(STREAM_VENV)/bin/pytest: $(STREAM_DIR)/requirements.txt
+	$(PYTHON) -m venv $(STREAM_VENV)
+	$(STREAM_PIP) install -U pip
+	$(STREAM_PIP) install -r $(STREAM_DIR)/requirements.txt
+
+stream-processor-test: $(STREAM_VENV)/bin/pytest ## QA validation + local/Flink unit tests
+	cd $(STREAM_DIR) && \
+		PYTHONPATH=.:.. ARGUS_AVRO_SCHEMA_PATH=../shared/avro/telemetry_event.avsc \
 		.venv/bin/pytest -q
 
 register-avro: ## Register TelemetryEvent Avro schema with local Schema Registry

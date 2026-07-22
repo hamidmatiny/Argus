@@ -55,3 +55,6 @@ shared/contracts/.venv/
 
 # Ingestion local venv
 ingestion/.venv/
+
+# Stream-processor local venv
+stream-processor/.venv/

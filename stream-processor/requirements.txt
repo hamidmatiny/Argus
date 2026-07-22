@@ -1,0 +1,5 @@
+kafka-python>=2.0.2,<3
+fastavro>=1.9,<2
+pytest>=8.0,<10
+# Optional: install for --engine=flink (large JVM dependency).
+# apache-flink==1.18.1
