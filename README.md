@@ -15,9 +15,10 @@ flowchart LR
   QA --> Quar["telemetry.quarantine"]
   QA --> Metrics["telemetry.qa_metrics"]
   Val --> Iceberg["Iceberg lakehouse"]
+  Val --> Drift["drift-monitor"]
   Iceberg --> Dagster["Dagster orchestration"]
-  Dagster --> Drift["drift-monitor"]
-  Drift --> Incidents["incident-engine"]
+  Drift --> IncRaw["incidents.raw"]
+  IncRaw --> Incidents["incident-engine"]
   Incidents --> OTel["observability"]
   OTel --> UI["dashboard"]
   Incidents --> UI
@@ -40,9 +41,10 @@ fleet devices/SDKs  ──┘       │
                      │            │            │
                      ▼            ▼            ▼
            telemetry.validated  quarantine  qa_metrics
-                     │
+                     │  \
+                     │   └──► drift-monitor ──► incidents.raw ──► incident-engine
                      ▼
-              Iceberg ──► Dagster ──► drift-monitor ──► incident-engine
+              Iceberg ──► Dagster
                                                               │
                                          observability / dashboard / ai-copilot
 ```
@@ -54,7 +56,7 @@ fleet devices/SDKs  ──┘       │
 | `shared/` | Multi | Contracts, schemas, shared libs | Phase 1 |
 | `ingestion/` | Python (Ray) | Simulator + Ray consumer (raw → normalized) | Phase 2 |
 | `stream-processor/` | Python (PyFlink + local) | QA gate → validated / quarantine / qa_metrics | Phase 3 |
-| `drift-monitor/` | Python | Feature/prediction drift detection | Later |
+| `drift-monitor/` | Python | KS + Evidently drift on validated → `incidents.raw` | Phase 4 |
 | `lakehouse/` | SQL/Python | Iceberg tables and catalog layout | Later |
 | `orchestration/` | Python (Dagster) | Asset jobs, sensors, ML lifecycle | Later |
 | `incident-engine/` | Go | Alert correlation and incidents | Later |

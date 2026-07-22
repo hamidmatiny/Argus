@@ -1,10 +1,11 @@
 # ARGUS — root developer targets
 
-.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test register-avro logs help
+.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test register-avro logs help
 
 COMPOSE ?= docker compose
 BUF ?= buf
-PYTHON ?= python3
+# Prefer 3.12 when present (wheels for numpy/scipy/evidently); fall back to python3.
+PYTHON ?= $(shell command -v python3.12 >/dev/null 2>&1 && echo python3.12 || echo python3)
 CONTRACTS_DIR := shared/contracts
 CONTRACTS_VENV := $(CONTRACTS_DIR)/.venv
 CONTRACTS_PIP := $(CONTRACTS_VENV)/bin/pip
@@ -14,6 +15,9 @@ INGESTION_PIP := $(INGESTION_VENV)/bin/pip
 STREAM_DIR := stream-processor
 STREAM_VENV := $(STREAM_DIR)/.venv
 STREAM_PIP := $(STREAM_VENV)/bin/pip
+DRIFT_DIR := drift-monitor
+DRIFT_VENV := $(DRIFT_DIR)/.venv
+DRIFT_PIP := $(DRIFT_VENV)/bin/pip
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?##"}; {printf "  %-22s %s\n", $$1, $$2}'
@@ -27,7 +31,7 @@ down: ## Stop local stack
 logs: ## Follow compose logs
 	$(COMPOSE) logs -f
 
-test: contracts-test ingestion-test stream-processor-test ## Fan-out tests
+test: contracts-test ingestion-test stream-processor-test drift-monitor-test ## Fan-out tests
 	@echo "==> test: Go modules (go.work)"
 	@if command -v go >/dev/null 2>&1; then \
 		go work sync 2>/dev/null || true; \
@@ -90,6 +94,17 @@ $(STREAM_VENV)/bin/pytest: $(STREAM_DIR)/requirements.txt
 stream-processor-test: $(STREAM_VENV)/bin/pytest ## QA validation + local/Flink unit tests
 	cd $(STREAM_DIR) && \
 		PYTHONPATH=.:.. ARGUS_AVRO_SCHEMA_PATH=../shared/avro/telemetry_event.avsc \
+		.venv/bin/pytest -q
+
+$(DRIFT_VENV)/bin/pytest: $(DRIFT_DIR)/requirements.txt
+	$(PYTHON) -m venv $(DRIFT_VENV)
+	$(DRIFT_PIP) install -U pip
+	$(DRIFT_PIP) install -r $(DRIFT_DIR)/requirements.txt
+
+drift-monitor-test: $(DRIFT_VENV)/bin/pytest ## KS/Evidently drift + incident publishing tests
+	cd $(DRIFT_DIR) && \
+		PYTHONPATH=.:.. ARGUS_AVRO_SCHEMA_PATH=../shared/avro/telemetry_event.avsc \
+		KAFKA_BROKERS=$${KAFKA_BROKERS:-localhost:19092} \
 		.venv/bin/pytest -q
 
 register-avro: ## Register TelemetryEvent Avro schema with local Schema Registry

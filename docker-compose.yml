@@ -254,10 +254,51 @@ services:
   #   build: ./orchestration
 
   # ---------------------------------------------------------------------------
-  # Phase — drift-monitor (placeholder)
+  # Phase 4 — drift-monitor (KS + Evidently → incidents.raw)
   # ---------------------------------------------------------------------------
-  # drift-monitor:
-  #   build: ./drift-monitor
+  drift-monitor:
+    build:
+      context: .
+      dockerfile: drift-monitor/Dockerfile
+    container_name: argus-drift-monitor
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      SCHEMA_REGISTRY_URL: http://redpanda:8081
+      DRIFT_SOURCE_TOPIC: telemetry.validated
+      DRIFT_INCIDENTS_TOPIC: incidents.raw
+      DRIFT_KAFKA_GROUP_ID: argus-drift-monitor
+      DRIFT_BASELINE_SAMPLES: ${DRIFT_BASELINE_SAMPLES:-200}
+      DRIFT_WINDOW_SIZE: ${DRIFT_WINDOW_SIZE:-50}
+      DRIFT_ALPHA: ${DRIFT_ALPHA:-0.05}
+      DRIFT_MIN_FEATURES_FOR_INCIDENT: ${DRIFT_MIN_FEATURES_FOR_INCIDENT:-2}
+      DRIFT_USE_LIVE_BASELINE: ${DRIFT_USE_LIVE_BASELINE:-false}
+      DRIFT_HEALTH_PORT: "8094"
+      DRIFT_METRICS_PORT: "8095"
+      DRIFT_REPORTS_DIR: /app/drift-monitor/reports
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ARGUS_AVRO_SCHEMA_PATH: /app/shared/avro/telemetry_event.avsc
+    ports:
+      - "8094:8094"
+      - "8095:8095"
+    volumes:
+      - ./drift-monitor/reports:/app/drift-monitor/reports
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      stream-processor:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8094/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1536M
+    restart: unless-stopped
 
   # ---------------------------------------------------------------------------
   # Phase — incident-engine (Go) (placeholder)

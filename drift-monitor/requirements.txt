@@ -1,0 +1,8 @@
+kafka-python>=2.0.2,<3
+fastavro>=1.9,<2
+numpy>=1.26,<3
+pandas>=2.1,<4
+scipy>=1.11,<2
+prometheus-client>=0.20,<1
+evidently>=0.4.40,<0.5
+pytest>=8.0,<10

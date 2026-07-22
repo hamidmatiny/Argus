@@ -20,7 +20,7 @@ This document describes the system design for ARGUS: responsibilities, data cont
 | **stream-processor (Flink / local)** | Streaming QA gate: Pandera-equivalent checks → `telemetry.validated` / `telemetry.quarantine` / `telemetry.qa_metrics` |
 | **lakehouse (Iceberg)** | Bronze → silver → gold tables; time travel; compaction |
 | **orchestration (Dagster)** | Assets, schedules, sensors; ties lakehouse to ML and drift jobs |
-| **drift-monitor** | Compare live vs baseline distributions; emit drift signals |
+| **drift-monitor** | KS + embedding + Evidently on `telemetry.validated`; publish `IncidentEvent` to `incidents.raw` |
 | **incident-engine** | Correlate QA/drift/SLO signals into incidents |
 | **api-gateway** | Authn/authz (OPA), rate limits, north-south API surface |
 | **observability** | OTel collection, metrics/traces/logs, SLOs and alerts |
@@ -37,7 +37,7 @@ This document describes the system design for ARGUS: responsibilities, data cont
    - fail → `telemetry.quarantine` (structured DLQ: field, rule, raw payload)
    - tumbling per-vehicle quarantine rate → `telemetry.qa_metrics`
 4. Validated events land in Iceberg bronze/silver; Dagster materializes gold assets and ML jobs.
-5. drift-monitor writes findings; incident-engine correlates with QA metrics and SLO breaches.
+5. `drift-monitor` consumes `telemetry.validated` in parallel (KS/Evidently vs golden baseline) and publishes `IncidentEvent` to `incidents.raw` when ≥ N features drift; incident-engine correlates with QA metrics and SLO breaches.
 6. Observability scrapes/receives OTel; dashboard and ai-copilot read via api-gateway.
 
 ```text
@@ -48,15 +48,16 @@ This document describes the system design for ARGUS: responsibilities, data cont
                                            /        |         \
                                           v         v          v
                                    validated   quarantine   qa_metrics
-                                          │
-                                          ▼
-                                     [Iceberg] → [Dagster] → [drift-monitor]
-                                                                    │
-                                                             [incident-engine]
-                                                                ↙         ↘
-                                                     [observability]   [dashboard]
-                                                                ↖         ↗
-                                                                 [ai-copilot]
+                                      │  \
+                                      │   └──► [drift-monitor] → incidents.raw
+                                      ▼                              │
+                                 [Iceberg] → [Dagster]               │
+                                                     \               ▼
+                                                      [incident-engine]
+                                                          ↙         ↘
+                                               [observability]   [dashboard]
+                                                          ↖         ↗
+                                                           [ai-copilot]
 ```
 
 ## Data contracts
@@ -65,7 +66,7 @@ Contracts live under `shared/` (schemas evolve in Phase 1+). Design principles:
 
 - **Envelope**: every event has `event_id`, `device_id`, `schema_version`, `event_time`, `ingest_time`, `payload`.
 - **Versioned schemas**: Avro or Protobuf + JSON Schema for API edges; incompatible changes require a new major `schema_version`.
-- **Topics**: `telemetry.raw`, `telemetry.normalized`, `telemetry.validated`, `telemetry.quarantine`, `telemetry.qa_metrics`, `signals.drift`, `signals.incidents`.
+- **Topics**: `telemetry.raw`, `telemetry.normalized`, `telemetry.validated`, `telemetry.quarantine`, `telemetry.qa_metrics`, `incidents.raw` (drift / future correlators).
 - **Iceberg**: bronze = raw-ish append; silver = validated/typed; gold = aggregates and feature tables for ML.
 - **API errors**: structured JSON problem details from api-gateway; no free-form strings as the sole error channel.
 
