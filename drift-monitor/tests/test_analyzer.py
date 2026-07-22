@@ -44,11 +44,13 @@ def test_embedding_distance_flags_centroid_shift():
     assert metrics["drift_detected"] is True
     assert metrics["mean_euclidean_distance"] > 2.0
 
+    # Identity: same frame vs itself (subset cosine is unstable near z≈0).
     same = compute_embedding_metrics(
-        features_to_embeddings(baseline.head(100)),
+        features_to_embeddings(baseline),
         features_to_embeddings(baseline),
     )
     assert same["drift_detected"] is False
+    assert same["mean_euclidean_distance"] < 1e-9
 
 
 def test_compute_drift_report_non_drifted_window():
@@ -83,10 +85,22 @@ def test_should_raise_incident_threshold():
 
 
 def test_analyzer_sliding_window_emits_report():
-    analyzer = DriftAnalyzer(baseline_samples=50, window_size=20)
+    analyzer = DriftAnalyzer(baseline_samples=50, warmup_samples=0, window_size=20)
+    # Live baseline first (synthetic seed alone must not mark ready / analyze).
     analyzer.seed_synthetic_baseline()
+    assert analyzer.baseline_ready is False
+    assert analyzer.baseline_source == "synthetic"
+    for _ in range(50):
+        row = {
+            f: float(generate_baseline_data(1, seed=None).iloc[0][f])
+            for f in DRIFT_FEATURES
+        }
+        assert analyzer.ingest(row) is None
+    assert analyzer.baseline_ready is True
+    assert analyzer.baseline_source == "live"
+
     report = None
-    for _ in range(20):
+    for _ in range(20):  # one tumbling window
         row = {
             f: float(generate_baseline_data(1, seed=None).iloc[0][f])
             for f in DRIFT_FEATURES

@@ -1,0 +1,16 @@
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/node_modules/
+.git/
+**/.env
+**/reports/*.html
+drift-monitor/reports/*.html
+**/*.egg-info/
+dist/
+build/
+tmp/
+.cache/

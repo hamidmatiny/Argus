@@ -78,7 +78,9 @@ services:
       KAFKA_BROKERS: redpanda:9092
       SCHEMA_REGISTRY_URL: http://redpanda:8081
       SIMULATOR_TOPIC: telemetry.raw
-      SIMULATOR_VEHICLES: ${SIMULATOR_VEHICLES:-5}
+      # Prefer >=12 vehicles so per-feature aggregates are stable enough for
+      # drift-monitor's frozen live baseline (5 independent random-walks wander).
+      SIMULATOR_VEHICLES: ${SIMULATOR_VEHICLES:-12}
       SIMULATOR_RATE: ${SIMULATOR_RATE:-10}
       SIMULATOR_DURATION: ${SIMULATOR_DURATION:-0}
       SIMULATOR_FAILURE_RATE: ${SIMULATOR_FAILURE_RATE:-0.05}
@@ -266,12 +268,14 @@ services:
       SCHEMA_REGISTRY_URL: http://redpanda:8081
       DRIFT_SOURCE_TOPIC: telemetry.validated
       DRIFT_INCIDENTS_TOPIC: incidents.raw
-      DRIFT_KAFKA_GROUP_ID: argus-drift-monitor
+      # Bump group id when baseline semantics change so offsets restart cleanly.
+      DRIFT_KAFKA_GROUP_ID: argus-drift-monitor-v4
       DRIFT_BASELINE_SAMPLES: ${DRIFT_BASELINE_SAMPLES:-200}
+      DRIFT_BASELINE_WARMUP_SAMPLES: ${DRIFT_BASELINE_WARMUP_SAMPLES:-200}
       DRIFT_WINDOW_SIZE: ${DRIFT_WINDOW_SIZE:-50}
       DRIFT_ALPHA: ${DRIFT_ALPHA:-0.05}
       DRIFT_MIN_FEATURES_FOR_INCIDENT: ${DRIFT_MIN_FEATURES_FOR_INCIDENT:-2}
-      DRIFT_USE_LIVE_BASELINE: ${DRIFT_USE_LIVE_BASELINE:-false}
+      DRIFT_USE_LIVE_BASELINE: ${DRIFT_USE_LIVE_BASELINE:-true}
       DRIFT_HEALTH_PORT: "8094"
       DRIFT_METRICS_PORT: "8095"
       DRIFT_REPORTS_DIR: /app/drift-monitor/reports
@@ -291,8 +295,9 @@ services:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8094/health"]
       interval: 15s
       timeout: 5s
-      retries: 8
-      start_period: 45s
+      retries: 10
+      # Live baseline needs DRIFT_BASELINE_SAMPLES validated events (~20s at 10/s).
+      start_period: 120s
     deploy:
       resources:
         limits:

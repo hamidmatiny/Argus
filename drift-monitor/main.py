@@ -104,8 +104,10 @@ _stats: dict[str, Any] = {
     "windows_analyzed": 0,
     "incidents_published": 0,
     "baseline_ready": False,
+    "baseline_source": None,
     "last_drifted_features": [],
 }
+# Readiness = live baseline frozen (not merely "Kafka consumer started").
 _ready = False
 
 
@@ -153,17 +155,19 @@ def run() -> int:
         )
 
     analyzer = DriftAnalyzer()
-    # Bootstrap synthetic baseline so the service is useful before enough
-    # validated traffic accumulates; live Kafka samples still rebuild if
-    # DRIFT_USE_LIVE_BASELINE=true and reference buffer fills first.
-    use_live = os.getenv("DRIFT_USE_LIVE_BASELINE", "false").lower() in {
+    # Always accumulate a live baseline from telemetry.validated (ingest()).
+    # Synthetic seed is an opt-in empty-topic fallback only; it never sets
+    # baseline_ready and is replaced as soon as enough live samples arrive.
+    # DRIFT_USE_LIVE_BASELINE defaults true; false enables synthetic cold-start.
+    use_live = os.getenv("DRIFT_USE_LIVE_BASELINE", "true").lower() in {
         "1",
         "true",
         "yes",
     }
     if not use_live:
         analyzer.seed_synthetic_baseline()
-        _stats["baseline_ready"] = True
+    _stats["baseline_ready"] = analyzer.baseline_ready
+    _stats["baseline_source"] = analyzer.baseline_source
 
     publisher = IncidentPublisher(brokers=KAFKA_BROKERS, topic=INCIDENTS_TOPIC)
     consumer = KafkaConsumer(
@@ -172,10 +176,11 @@ def run() -> int:
         group_id=GROUP_ID,
         client_id="argus-drift-monitor",
         enable_auto_commit=True,
-        auto_offset_reset="earliest",
+        # latest: build the live baseline from current traffic, not mixed
+        # historical eras left in the topic across simulator restarts.
+        auto_offset_reset=os.getenv("DRIFT_AUTO_OFFSET_RESET", "latest"),
         consumer_timeout_ms=1000,
     )
-    _ready = True
     logger.info(
         "drift_monitor_started",
         extra={
@@ -186,11 +191,15 @@ def run() -> int:
             "health_port": HEALTH_PORT,
             "metrics_port": METRICS_PORT,
             "baseline_ready": analyzer.baseline_ready,
+            "baseline_source": analyzer.baseline_source,
+            "use_live_baseline": use_live,
         },
     )
 
     windows = 0
     last_progress = 0.0
+    # Rising-edge only: don't republish while the breach condition persists.
+    incident_active = False
     try:
         while not _shutdown.is_set():
             polled = False
@@ -202,6 +211,9 @@ def run() -> int:
                 report = analyzer.ingest(record)
                 _stats["records_evaluated"] = analyzer.records_evaluated
                 _stats["baseline_ready"] = analyzer.baseline_ready
+                _stats["baseline_source"] = analyzer.baseline_source
+                if analyzer.baseline_ready:
+                    _ready = True
                 metrics.records_evaluated.set(analyzer.records_evaluated)
                 metrics.baseline_staleness.set(analyzer.baseline_staleness_seconds)
 
@@ -218,15 +230,12 @@ def run() -> int:
                 if (
                     windows % max(EVIDENTLY_EVERY_N_WINDOWS, 1) == 0
                     and analyzer._baseline_df is not None
-                    and analyzer._buffer
+                    and analyzer._last_window_df is not None
                 ):
-                    import pandas as pd
-
-                    window_df = pd.DataFrame(
-                        analyzer._buffer[-analyzer.window_size :]
-                    )
                     html_path, ev_scores = run_evidently_drift_report(
-                        analyzer._baseline_df, window_df, reports_dir=REPORTS_DIR
+                        analyzer._baseline_df,
+                        analyzer._last_window_df,
+                        reports_dir=REPORTS_DIR,
                     )
                     if ev_scores:
                         metrics.set_feature_scores({**scores, **ev_scores})
@@ -236,15 +245,19 @@ def run() -> int:
                             extra={"path": str(html_path)},
                         )
 
-                if should_raise_incident(
+                breached = should_raise_incident(
                     report, min_features=DRIFT_MIN_FEATURES_FOR_INCIDENT
-                ):
+                )
+                if breached and not incident_active:
                     event = build_incident_event(
                         report, threshold=DRIFT_MIN_FEATURES_FOR_INCIDENT
                     )
                     publisher.publish(event)
                     _stats["incidents_published"] = publisher.published
                     metrics.incidents_published.set(publisher.published)
+                    incident_active = True
+                elif not breached:
+                    incident_active = False
 
                 now = time.monotonic()
                 if now - last_progress >= 10.0:

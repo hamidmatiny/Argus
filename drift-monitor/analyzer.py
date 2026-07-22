@@ -14,6 +14,7 @@ from scipy.stats import ks_2samp
 from config import (
     DRIFT_ALPHA,
     DRIFT_BASELINE_SAMPLES,
+    DRIFT_BASELINE_WARMUP_SAMPLES,
     DRIFT_FEATURES,
     DRIFT_MIN_FEATURES_FOR_INCIDENT,
     DRIFT_WINDOW_SIZE,
@@ -144,23 +145,18 @@ def compute_drift_report(
         features_to_embeddings(window_df),
         features_to_embeddings(baseline_df),
     )
-    # Also KS on embedding L2 norms (sentinel-ray).
+    # KS on embedding L2 norms decides drift_detected (sentinel-ray). Centroid
+    # cosine / euclidean are observability metrics only — OR-ing them in made
+    # every small centroid wobble count as a drifted "feature" toward incidents.
     window_norms = np.linalg.norm(features_to_embeddings(window_df), axis=1)
     baseline_norms = np.linalg.norm(features_to_embeddings(baseline_df), axis=1)
     embedding_ks = ks_feature_test(window_norms, baseline_norms, alpha=alpha)
     features["embedding"] = {
         **embedding_ks,
         **embedding_metrics,
-        "drift_detected": bool(
-            embedding_ks["drift_detected"] or embedding_metrics["drift_detected"]
-        ),
-        "drift_score": float(
-            max(
-                embedding_ks["drift_score"],
-                embedding_metrics["mean_euclidean_distance"]
-                / max(EMBEDDING_EUCLIDEAN_THRESHOLD, 1e-9),
-            )
-        ),
+        "drift_detected": bool(embedding_ks["drift_detected"]),
+        "drift_score": float(embedding_ks["drift_score"]),
+        "centroid_drift_detected": bool(embedding_metrics["drift_detected"]),
     }
 
     drifted = [name for name, meta in features.items() if meta.get("drift_detected")]
@@ -188,44 +184,69 @@ def should_raise_incident(
 @dataclass
 class DriftAnalyzer:
     """
-    Stateful analyzer: build baseline from a reference window, then sliding KS.
+    Stateful analyzer: live reference baseline, then sliding-window KS.
 
     Unlike sentinel-ray's Ray actor, this reads batches fed from Kafka.
+    Incident publishing (rising-edge) lives in main.py so overlapping windows
+    do not spam incidents.raw 1:1 with windows_analyzed.
     """
 
     baseline_samples: int = DRIFT_BASELINE_SAMPLES
+    warmup_samples: int = DRIFT_BASELINE_WARMUP_SAMPLES
     window_size: int = DRIFT_WINDOW_SIZE
     alpha: float = DRIFT_ALPHA
     min_features_for_incident: int = DRIFT_MIN_FEATURES_FOR_INCIDENT
     _baseline_df: pd.DataFrame | None = field(default=None, init=False, repr=False)
     _baseline_built_at: datetime | None = field(default=None, init=False, repr=False)
+    # "synthetic" = cold-start fallback (not ready); "live" = real validated traffic.
+    _baseline_source: str | None = field(default=None, init=False, repr=False)
+    _warmup_remaining: int = field(init=False, repr=False)
     _buffer: list[dict[str, Any]] = field(default_factory=list, init=False, repr=False)
     _reference_buffer: list[dict[str, Any]] = field(
         default_factory=list, init=False, repr=False
     )
+    _last_window_df: pd.DataFrame | None = field(default=None, init=False, repr=False)
     records_evaluated: int = field(default=0, init=False)
+
+    def __post_init__(self) -> None:
+        self._warmup_remaining = max(0, int(self.warmup_samples))
 
     @property
     def baseline_ready(self) -> bool:
-        return self._baseline_df is not None and len(self._baseline_df) > 0
+        """True only once a live baseline from real traffic is frozen."""
+        return self._baseline_source == "live"
+
+    @property
+    def baseline_source(self) -> str | None:
+        return self._baseline_source
 
     @property
     def baseline_staleness_seconds(self) -> float:
-        if self._baseline_built_at is None:
+        if self._baseline_built_at is None or not self.baseline_ready:
             return 0.0
         return (datetime.now(timezone.utc) - self._baseline_built_at).total_seconds()
 
     def seed_synthetic_baseline(self) -> None:
-        """Optional bootstrap when Kafka has no validated history yet."""
+        """
+        Optional cold-start when Kafka has no validated history.
+
+        Does NOT set baseline_ready. ingest() keeps accumulating a live
+        reference and replaces this the moment enough real samples arrive.
+        Analysis is withheld until the live baseline exists (avoids KS against
+        a fictional Gaussian reference).
+        """
+        if self._baseline_source == "live":
+            return
         self._baseline_df = generate_baseline_data(self.baseline_samples)
         self._baseline_built_at = datetime.now(timezone.utc)
+        self._baseline_source = "synthetic"
 
     def ingest(self, record: dict[str, Any]) -> dict[str, Any] | None:
         """
         Ingest one validated telemetry record.
 
-        Returns a drift report when a sliding window is ready; otherwise None.
-        During startup, accumulates a reference window as the golden baseline.
+        Always accumulates toward a live baseline first. Returns a drift report
+        only after the live baseline is ready and a sliding window is full.
         """
         row = {f: float(record[f]) for f in DRIFT_FEATURES if f in record}
         if len(row) < len(DRIFT_FEATURES):
@@ -233,12 +254,20 @@ class DriftAnalyzer:
 
         self.records_evaluated += 1
 
-        if not self.baseline_ready:
+        # Skip cold-start kinematics (joint restart with the simulator).
+        if self._baseline_source != "live" and self._warmup_remaining > 0:
+            self._warmup_remaining -= 1
+            return None
+
+        # Prefer a live reference from real traffic; replace any synthetic seed.
+        if self._baseline_source != "live":
             self._reference_buffer.append(row)
             if len(self._reference_buffer) >= self.baseline_samples:
                 self._baseline_df = pd.DataFrame(self._reference_buffer)
                 self._baseline_built_at = datetime.now(timezone.utc)
+                self._baseline_source = "live"
                 self._reference_buffer.clear()
+            # No KS / incidents until the reference is real traffic.
             return None
 
         self._buffer.append(row)
@@ -246,10 +275,10 @@ class DriftAnalyzer:
             return None
 
         window_df = pd.DataFrame(self._buffer[-self.window_size :])
-        # Sliding: drop oldest to keep buffer bounded.
         overflow = len(self._buffer) - self.window_size
         if overflow > 0:
             self._buffer = self._buffer[overflow:]
+        self._last_window_df = window_df
 
         assert self._baseline_df is not None
         return compute_drift_report(window_df, self._baseline_df, alpha=self.alpha)

@@ -16,16 +16,21 @@ DRIFT_FEATURES: tuple[str, ...] = (
     "compute_load_pct",
 )
 
-# Golden baseline means/stds used when bootstrapping a synthetic reference
-# (also used until enough Kafka samples arrive for a live baseline).
+# Rough mean/std for synthetic cold-start + embedding z-scores ONLY.
+# Empirically measured from ingestion/simulator kinematics (n≈5000, 20 vehicles,
+# 1s ticks, failure_rate=0) — NOT a substitute for a live baseline from
+# telemetry.validated. Live accumulation always replaces this when available.
 GOLDEN_BASELINE: dict[str, tuple[float, float]] = {
-    "speed_mph": (35.0, 12.0),
-    "brake_pressure": (0.25, 0.08),
-    "lidar_temp_c": (40.0, 3.0),
-    "compute_load_pct": (45.0, 12.0),
+    "speed_mph": (22.0, 19.7),
+    "brake_pressure": (0.27, 0.20),
+    "lidar_temp_c": (39.8, 1.8),
+    "compute_load_pct": (40.7, 12.4),
 }
 
 DRIFT_BASELINE_SAMPLES = int(os.getenv("DRIFT_BASELINE_SAMPLES", "200"))
+# Discard this many validated records before freezing the live baseline so a
+# joint simulator+monitor restart doesn't capture cold-start kinematics.
+DRIFT_BASELINE_WARMUP_SAMPLES = int(os.getenv("DRIFT_BASELINE_WARMUP_SAMPLES", "200"))
 DRIFT_WINDOW_SIZE = int(os.getenv("DRIFT_WINDOW_SIZE", "50"))
 DRIFT_ALPHA = float(os.getenv("DRIFT_ALPHA", "0.05"))
 DRIFT_MIN_FEATURES_FOR_INCIDENT = int(os.getenv("DRIFT_MIN_FEATURES_FOR_INCIDENT", "2"))
