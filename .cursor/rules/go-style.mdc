@@ -1,0 +1,34 @@
+---
+description: Go style — golangci-lint, modules, service patterns
+globs: "**/*.go"
+alwaysApply: false
+---
+
+# Go conventions (ARGUS)
+
+## Tooling
+
+- Format with `gofmt` / `goimports`.
+- Lint with **golangci-lint**; fix issues before merge.
+- Modules: one `go.mod` per Go component (`incident-engine`, `api-gateway`, `cli`); root `go.work` wires them.
+
+## Style
+
+- Prefer standard library first; justify new deps in the PR.
+- Context is the first parameter for I/O and RPCs: `func(ctx context.Context, ...)`.
+- Return wrapped errors: `fmt.Errorf("load config: %w", err)`.
+- Public APIs need doc comments.
+
+## Services
+
+- Expose `/healthz` and `/readyz`.
+- Log with structured JSON (e.g. `log/slog` with JSON handler).
+- Config via env vars documented in the service README and root `.env.example`.
+
+```go
+// ❌ BAD
+log.Printf("failed: %v", err)
+
+// ✅ GOOD
+slog.Error("failed to handle request", "err", err, "route", path)
+```

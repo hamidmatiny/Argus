@@ -1,0 +1,37 @@
+---
+description: Python style — ruff, mypy, black
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Python conventions (ARGUS)
+
+## Tooling
+
+- **ruff** — lint (and import sorting where configured)
+- **black** — format
+- **mypy** — type check; prefer explicit annotations on public functions
+
+Run the project’s Makefile/`lint` and `test` targets once they exist for a component; do not skip type errors with blanket `# type: ignore` unless justified.
+
+## Style
+
+- Python 3.11+ idioms; use `pathlib` over `os.path` for new code.
+- Prefer structured logging (`structlog` or stdlib JSON) over `print`.
+- Pin deps in the component’s lockfile when introduced.
+
+```python
+# ❌ BAD
+def process(x):
+    print("ok", x)
+
+# ✅ GOOD
+def process(x: TelemetryEvent) -> None:
+    logger.info("processed_event", event_id=x.event_id)
+```
+
+## Services / jobs
+
+- Dockerize; document entrypoints in README.
+- Health checks for long-running services; clear exit codes for batch jobs.
+- Tests with `pytest`; keep fixtures local to the component unless shared intentionally.

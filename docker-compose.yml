@@ -1,0 +1,112 @@
+# ARGUS local development stack
+# Phase 0: Redpanda (Kafka-API compatible) only.
+# Later phases will uncomment / add services below.
+
+name: argus
+
+services:
+  # ---------------------------------------------------------------------------
+  # Messaging — Redpanda (Kafka API, no ZooKeeper)
+  # ---------------------------------------------------------------------------
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.4
+    container_name: argus-redpanda
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=warn
+    ports:
+      - "19092:19092" # Kafka API (host)
+      - "18081:18081" # Schema Registry
+      - "18082:18082" # Pandaproxy (HTTP proxy)
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy.*true'"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+
+  # ---------------------------------------------------------------------------
+  # Phase 1+ — shared contracts / schema registry consumers (placeholder)
+  # ---------------------------------------------------------------------------
+  # shared: ...
+
+  # ---------------------------------------------------------------------------
+  # Phase — ingestion (Ray) (placeholder)
+  # ---------------------------------------------------------------------------
+  # ingestion:
+  #   build: ./ingestion
+  #   depends_on:
+  #     redpanda:
+  #       condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Phase — stream-processor (Flink QA gate) (placeholder)
+  # ---------------------------------------------------------------------------
+  # stream-processor:
+  #   build: ./stream-processor
+  #   depends_on:
+  #     redpanda:
+  #       condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Phase — lakehouse (Iceberg catalog / compute deps) (placeholder)
+  # ---------------------------------------------------------------------------
+  # lakehouse-catalog: ...
+  # lakehouse-query: ...
+
+  # ---------------------------------------------------------------------------
+  # Phase — orchestration (Dagster) (placeholder)
+  # ---------------------------------------------------------------------------
+  # orchestration:
+  #   build: ./orchestration
+
+  # ---------------------------------------------------------------------------
+  # Phase — drift-monitor (placeholder)
+  # ---------------------------------------------------------------------------
+  # drift-monitor:
+  #   build: ./drift-monitor
+
+  # ---------------------------------------------------------------------------
+  # Phase — incident-engine (Go) (placeholder)
+  # ---------------------------------------------------------------------------
+  # incident-engine:
+  #   build: ./incident-engine
+
+  # ---------------------------------------------------------------------------
+  # Phase — api-gateway (Go + OPA) (placeholder)
+  # ---------------------------------------------------------------------------
+  # api-gateway:
+  #   build: ./api-gateway
+
+  # ---------------------------------------------------------------------------
+  # Phase — observability (OTel collector, etc.) (placeholder)
+  # ---------------------------------------------------------------------------
+  # otel-collector:
+  #   image: otel/opentelemetry-collector-contrib:latest
+
+  # ---------------------------------------------------------------------------
+  # Phase — ai-copilot (placeholder)
+  # ---------------------------------------------------------------------------
+  # ai-copilot:
+  #   build: ./ai-copilot
+
+  # ---------------------------------------------------------------------------
+  # Phase — dashboard (placeholder)
+  # ---------------------------------------------------------------------------
+  # dashboard:
+  #   build: ./dashboard
+
+volumes:
+  redpanda-data:

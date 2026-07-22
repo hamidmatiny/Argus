@@ -1,0 +1,38 @@
+---
+description: TypeScript style — eslint, prettier, React/dashboard norms
+globs: "**/*.{ts,tsx,js,jsx}"
+alwaysApply: false
+---
+
+# TypeScript conventions (ARGUS)
+
+## Tooling
+
+- **eslint** — lint; no unchecked `any` in new code without justification
+- **prettier** — format; do not fight the shared config
+- Prefer strict `tsconfig` (`strict: true`)
+
+## Style
+
+- Prefer `const`, narrow unions, and explicit return types on exported functions.
+- Avoid default exports except where the framework requires them (e.g. Next pages).
+- Colocate component tests next to sources when the package uses that pattern.
+
+```typescript
+// ❌ BAD
+export function load(id) {
+  return fetch("/api/" + id).then((r) => r.json());
+}
+
+// ✅ GOOD
+export async function loadIncident(id: string): Promise<Incident> {
+  const res = await fetch(`/api/incidents/${id}`);
+  if (!res.ok) throw new Error(`loadIncident failed: ${res.status}`);
+  return res.json() as Promise<Incident>;
+}
+```
+
+## Dashboard / SDK
+
+- Talk to **api-gateway** only — never hardcode internal service URLs in the browser.
+- Document env vars (`VITE_*` / `NEXT_PUBLIC_*` as applicable) in the package README.

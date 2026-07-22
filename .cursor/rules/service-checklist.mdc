@@ -1,0 +1,18 @@
+---
+description: New ARGUS service checklist — README, Docker, health, logs, tests
+alwaysApply: true
+---
+
+# New service checklist
+
+Before marking a service complete:
+
+- [ ] `README.md` with purpose, run instructions, and env vars
+- [ ] `Dockerfile` (and compose service stub when local-dev ready)
+- [ ] `/healthz` (and `/readyz` if dependent on Kafka/DB/etc.)
+- [ ] Structured JSON logging
+- [ ] Automated tests wired into `make test` for that language
+- [ ] Module registered in `go.work` if Go, or package manifests if Python/TS
+- [ ] Relevant keys added to root `.env.example` with phase TODO comments
+
+Do not merge skeleton services that only compile without health, logging, and tests.

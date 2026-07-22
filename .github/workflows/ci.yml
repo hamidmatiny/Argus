@@ -1,0 +1,30 @@
+# ARGUS CI — skeleton. Later phases add lint/test/build per component.
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scaffold:
+    name: Scaffold check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Placeholder
+        run: |
+          echo "ARGUS CI scaffold — Phase 0"
+          echo "Later phases will add:"
+          echo "  - Go: golangci-lint + go test (incident-engine, api-gateway, cli)"
+          echo "  - Python: ruff, mypy, black, pytest (ingestion, drift, orchestration, ...)"
+          echo "  - TypeScript: eslint, prettier, unit tests (dashboard, sdk/typescript)"
+          echo "  - Docker build matrix and e2e against compose"
+          ls -la

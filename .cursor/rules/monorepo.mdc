@@ -1,0 +1,39 @@
+---
+description: ARGUS monorepo conventions — layout, service definition of done, commits
+alwaysApply: true
+---
+
+# ARGUS monorepo conventions
+
+## Layout
+
+- Keep code in the owning component directory (`ingestion/`, `api-gateway/`, etc.).
+- Cross-cutting contracts and shared libs belong in `shared/`.
+- Infra lives under `infra/{terraform,helm,argocd}`; do not bury cloud config inside app trees.
+- Docs and ADRs go in `docs/`; do not invent parallel top-level doc trees.
+
+## Commit messages
+
+Use phase-prefixed subjects:
+
+```text
+phase-N: short description
+```
+
+Examples: `phase-0: scaffold monorepo`, `phase-2: add Flink QA quarantine topic`.
+
+## Definition of done — every new service
+
+A service is not done until it has:
+
+1. `README.md` — purpose, how to run, env vars, owners
+2. `Dockerfile` — multi-stage when practical
+3. Health endpoints — at least `/healthz` (liveness); `/readyz` when dependencies matter
+4. Structured **JSON** logging (no free-form printf as the primary log channel)
+5. Tests — unit at minimum; integration where the service talks to Kafka/DB
+
+## General
+
+- Prefer small, reviewable PRs mapped to a single phase or component.
+- Do not commit secrets; use `.env.example` and inject secrets via compose/K8s.
+- Match existing language tooling (see language rule files) before adding new linters.
