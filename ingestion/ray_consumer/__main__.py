@@ -50,6 +50,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.getenv("INGESTION_NORMALIZED_TOPIC", "telemetry.normalized"),
     )
     p.add_argument(
+        "--quarantine-topic",
+        default=os.getenv("INGESTION_QUARANTINE_TOPIC", "telemetry.quarantine"),
+        help="Structural DLQ (same schema as stream-processor quarantine)",
+    )
+    p.add_argument(
         "--group-id",
         default=os.getenv("INGESTION_KAFKA_GROUP_ID", "argus-ingestion"),
     )
@@ -135,6 +140,7 @@ def run(args: argparse.Namespace) -> int:
         brokers=args.broker,
         source_topic=args.source_topic,
         dest_topic=args.dest_topic,
+        quarantine_topic=args.quarantine_topic,
         group_id=args.group_id,
         schema_registry_url=args.schema_registry,
     )

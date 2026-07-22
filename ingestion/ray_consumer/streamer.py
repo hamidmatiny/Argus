@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from typing import Any
@@ -9,7 +10,11 @@ from typing import Any
 import ray
 from kafka import KafkaConsumer, KafkaProducer
 
-from ingestion.ray_consumer.normalize import decode_kafka_value, normalize_record
+from ingestion.ray_consumer.normalize import (
+    build_structural_quarantine,
+    decode_kafka_value,
+    normalize_record,
+)
 from ingestion.simulator.avro_codec import encode_confluent_avro, load_avro_schema
 from ingestion.simulator.kafka_publisher import ensure_schema_registered
 
@@ -21,8 +26,8 @@ class DataStreamer:
     """
     Stateful Ray actor owning one vehicle/camera partition slice.
 
-    Mirrors sentinel-ray's DataStreamer pattern: actors process partitions
-    concurrently via ray.get on a pool of futures.
+    Pass-through normalizer: decode/coerce only. Semantic QA belongs to
+    stream-processor. Structural failures go to ``telemetry.quarantine``.
     """
 
     def __init__(
@@ -32,6 +37,7 @@ class DataStreamer:
         brokers: str,
         source_topic: str,
         dest_topic: str,
+        quarantine_topic: str,
         group_id: str,
         schema_registry_url: str,
         schema_id: int,
@@ -39,6 +45,7 @@ class DataStreamer:
         self.partition_id = partition_id
         self.source_topic = source_topic
         self.dest_topic = dest_topic
+        self.quarantine_topic = quarantine_topic
         self.schema = load_avro_schema()
         self.schema_id = schema_id
         self._stats = {
@@ -61,48 +68,62 @@ class DataStreamer:
             linger_ms=20,
         )
 
+    def _publish_quarantine(
+        self, record: dict[str, Any] | None, issues: list[str]
+    ) -> None:
+        q = build_structural_quarantine(
+            record, issues, source_topic=self.source_topic
+        )
+        key = str(q.get("vehicle_id") or "unknown").encode("utf-8")
+        self._producer.send(
+            self.quarantine_topic,
+            key=key,
+            value=json.dumps(q, default=str).encode("utf-8"),
+        )
+        self._stats["quarantined"] += 1
+        logger.warning(
+            "structural_quarantine",
+            extra={
+                "partition_id": self.partition_id,
+                "issues": issues,
+                "field": q.get("field"),
+                "source_topic": self.source_topic,
+            },
+        )
+
     def process_batch(self, max_messages: int = 50) -> dict[str, Any]:
-        """Pull up to max_messages, normalize, republish clean events."""
+        """Pull up to max_messages, pass-through normalize, republish or quarantine."""
         processed = 0
         for message in self._consumer:
             self._stats["consumed"] += 1
             try:
                 record, codec = decode_kafka_value(message.value)
                 if record is None:
-                    self._stats["quarantined"] += 1
-                    logger.warning(
-                        "quarantine_raw",
-                        extra={"partition_id": self.partition_id, "codec": codec},
+                    self._publish_quarantine(
+                        {"_raw_codec": codec},
+                        ["decode_failed"],
                     )
                 else:
                     normalized, issues = normalize_record(record)
                     if normalized is None:
-                        self._stats["quarantined"] += 1
-                        logger.warning(
-                            "quarantine_invalid",
-                            extra={
-                                "partition_id": self.partition_id,
-                                "issues": issues,
-                            },
-                        )
+                        self._publish_quarantine(record, issues)
                     else:
-                        if issues:
-                            logger.info(
-                                "normalized_with_issues",
-                                extra={
-                                    "partition_id": self.partition_id,
-                                    "issues": issues,
-                                    "vehicle_id": normalized.get("vehicle_id"),
-                                },
+                        try:
+                            payload = encode_confluent_avro(
+                                normalized,
+                                schema=self.schema,
+                                schema_id=self.schema_id,
                             )
-                        payload = encode_confluent_avro(
-                            normalized,
-                            schema=self.schema,
-                            schema_id=self.schema_id,
-                        )
-                        key = str(normalized["vehicle_id"]).encode("utf-8")
-                        self._producer.send(self.dest_topic, key=key, value=payload)
-                        self._stats["published"] += 1
+                        except Exception:
+                            self._publish_quarantine(
+                                normalized, ["avro_encode_failed"]
+                            )
+                        else:
+                            key = str(normalized["vehicle_id"]).encode("utf-8")
+                            self._producer.send(
+                                self.dest_topic, key=key, value=payload
+                            )
+                            self._stats["published"] += 1
             except Exception as exc:  # noqa: BLE001 — keep actor alive
                 self._stats["errors"] += 1
                 logger.exception(
@@ -130,6 +151,7 @@ def create_streamer_pool(
     brokers: str,
     source_topic: str,
     dest_topic: str,
+    quarantine_topic: str,
     group_id: str,
     schema_registry_url: str,
 ) -> list[Any]:
@@ -145,6 +167,7 @@ def create_streamer_pool(
             brokers=brokers,
             source_topic=source_topic,
             dest_topic=dest_topic,
+            quarantine_topic=quarantine_topic,
             group_id=group_id,
             schema_registry_url=schema_registry_url,
             schema_id=schema_id,

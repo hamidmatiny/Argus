@@ -6,27 +6,38 @@ rules, and routes to validated / quarantine topics with rolling quarantine-rate
 metrics — a modernization of sentinel-ray’s `QAValidationWorker` and
 hydra-data-factory’s Pydantic/Pandera triage, as a real streaming job.
 
+## Division of responsibility
+
+| Layer | Role |
+|-------|------|
+| **`ingestion/ray_consumer`** | Decode / type-coerce only. Must **not** clamp ranges or invent defaults. Structural failures → `telemetry.quarantine` with `source_topic=telemetry.raw`. |
+| **`stream-processor` (this service)** | **Single authority** on semantic pass/fail. Range, enum, regex, and required-field checks live here — and only here. |
+
+Ray publishes pass-through (possibly out-of-range) events to `telemetry.normalized`
+so this gate — and later drift-monitor — see the real anomaly signal.
+
 ## Topic topology
 
 ```text
 telemetry.raw
       │
+      ├──► telemetry.quarantine     ← ray-consumer (structural; source_topic=telemetry.raw)
       ▼
-telemetry.normalized          ← ingestion/ray_consumer
+telemetry.normalized            ← ray-consumer (pass-through)
       │
       ▼
- stream-processor (QA gate)
+ stream-processor (QA gate)     ← sole semantic authority
       │
       ├──► telemetry.validated     # contract-clean events (Avro)
-      ├──► telemetry.quarantine    # DLQ: field, rule, reason, raw_payload (JSON)
+      ├──► telemetry.quarantine    # semantic DLQ (source_topic=telemetry.normalized)
       └──► telemetry.qa_metrics    # per-vehicle tumbling quarantine rate (JSON)
 ```
 
 | Topic | Content |
 |-------|---------|
-| `telemetry.normalized` | Input from Ray ingestion |
+| `telemetry.normalized` | Pass-through from Ray (may still fail semantic checks) |
 | `telemetry.validated` | Passes all contract checks |
-| `telemetry.quarantine` | Structured rejection (`field`, `rule`, `reason`, `violations`, `raw_payload`) |
+| `telemetry.quarantine` | Shared DLQ (`field`, `rule`, `reason`, `violations`, `raw_payload`); use `source_topic` to tell ray vs QA |
 | `telemetry.qa_metrics` | Windowed `{vehicle_id, quarantine_rate, exceeded, ...}` |
 
 ## Engines: `--engine=local|flink`

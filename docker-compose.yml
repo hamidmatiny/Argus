@@ -118,6 +118,7 @@ services:
       SCHEMA_REGISTRY_URL: http://redpanda:8081
       INGESTION_RAW_TOPIC: telemetry.raw
       INGESTION_NORMALIZED_TOPIC: telemetry.normalized
+      INGESTION_QUARANTINE_TOPIC: telemetry.quarantine
       INGESTION_KAFKA_GROUP_ID: argus-ingestion
       # 2 actors fits a 2Gi cgroup; raise with memory if you scale partitions.
       RAY_NUM_PARTITIONS: ${RAY_NUM_PARTITIONS:-2}

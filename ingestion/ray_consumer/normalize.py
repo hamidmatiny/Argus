@@ -1,4 +1,10 @@
-"""Lightweight TelemetryEvent normalization for the Ray ingestion path."""
+"""Pass-through TelemetryEvent normalization for the Ray ingestion path.
+
+Division of responsibility:
+  - ray_consumer: decode + unambiguous type coercion only; publish structural
+    failures to ``telemetry.quarantine``.
+  - stream-processor: sole authority on semantic pass/fail (ranges, enums, regex).
+"""
 
 from __future__ import annotations
 
@@ -7,43 +13,40 @@ from typing import Any
 
 from ingestion.simulator.avro_codec import decode_confluent_avro, load_avro_schema
 
-_VALID_SENSOR = {
-    "SENSOR_STATUS_OK",
-    "SENSOR_STATUS_DEGRADED",
-    "SENSOR_STATUS_FAULT",
-}
-_VALID_DEVICE = {
-    "DEVICE_TYPE_VEHICLE",
-    "DEVICE_TYPE_EDGE_GATEWAY",
-    "DEVICE_TYPE_SIMULATOR",
-}
-
 
 def normalize_record(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
     """
-    Normalize a TelemetryEvent-shaped dict.
+    Decode/coerce a TelemetryEvent-shaped dict without semantic laundering.
 
-    Returns (normalized_record | None, issues).
-    None means the record should be quarantined / dropped (not republished).
+    Returns ``(normalized_record | None, structural_issues)``.
+    ``None`` means a *structural* failure — publish to quarantine, do not
+    republish to ``telemetry.normalized``.
+
+    Out-of-range numerics and unrecognized enums are passed through unchanged
+    so stream-processor (and later drift-monitor) see the real anomaly signal.
     """
     issues: list[str] = []
     out: dict[str, Any] = dict(raw)
 
-    vehicle_id = str(out.get("vehicle_id") or "").strip()
-    if not vehicle_id or not vehicle_id.startswith("VH-"):
-        issues.append("invalid_vehicle_id")
+    vehicle_id = out.get("vehicle_id")
+    if vehicle_id is None or str(vehicle_id).strip() == "":
+        issues.append("empty_vehicle_id")
         return None, issues
-    out["vehicle_id"] = vehicle_id
+    out["vehicle_id"] = str(vehicle_id).strip()
 
-    trip_id = str(out.get("trip_id") or "").strip()
-    if not trip_id:
-        issues.append("missing_trip_id")
-        trip_id = "unknown"
-    out["trip_id"] = trip_id
+    # trip_id / hardware_version / enums: pass through as-is (no defaults).
+    if "trip_id" in out and out["trip_id"] is not None:
+        out["trip_id"] = str(out["trip_id"])
+    if "hardware_version" in out and out["hardware_version"] is not None:
+        out["hardware_version"] = str(out["hardware_version"])
+    if "sensor_status" in out and out["sensor_status"] is not None:
+        out["sensor_status"] = str(out["sensor_status"])
+    if "device_type" in out and out["device_type"] is not None:
+        out["device_type"] = str(out["device_type"])
 
     ts = out.get("timestamp")
     if ts is None or ts == "":
-        issues.append("missing_timestamp")
+        issues.append("unparseable_timestamp")
         return None, issues
     try:
         if isinstance(ts, datetime):
@@ -52,67 +55,82 @@ def normalize_record(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[s
             parsed = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
         out["timestamp"] = parsed.astimezone(timezone.utc).isoformat()
     except ValueError:
-        issues.append("invalid_timestamp")
+        issues.append("unparseable_timestamp")
         return None, issues
 
     try:
-        lat = float(out.get("gps_lat"))
-        lon = float(out.get("gps_lon"))
+        out["gps_lat"] = float(out.get("gps_lat"))
+        out["gps_lon"] = float(out.get("gps_lon"))
     except (TypeError, ValueError):
-        issues.append("malformed_gps")
+        issues.append("non_numeric_gps")
         return None, issues
-    if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
-        issues.append("gps_out_of_range")
-        return None, issues
-    out["gps_lat"] = lat
-    out["gps_lon"] = lon
+    # Out-of-range GPS is a semantic issue — pass through for stream-processor.
 
     try:
-        speed = float(out.get("speed_mph"))
+        out["speed_mph"] = float(out.get("speed_mph"))
     except (TypeError, ValueError):
-        issues.append("invalid_speed")
+        issues.append("non_numeric_speed")
         return None, issues
-    if speed < 0 or speed > 120:
-        issues.append("speed_out_of_range")
-        # Soft-clamp for recoverable spikes so Flink still sees a typed event.
-        speed = max(0.0, min(120.0, speed))
-        out["_clamped_speed"] = True
-    out["speed_mph"] = speed
+    # Out-of-range speed is a semantic issue — pass through (no clamping).
 
-    for field, default in (
-        ("brake_pressure", 0.0),
-        ("lidar_temp_c", 0.0),
-        ("compute_load_pct", 0.0),
-    ):
+    for field in ("brake_pressure", "lidar_temp_c", "compute_load_pct"):
+        if field not in out:
+            continue
+        raw_val = out.get(field)
+        if raw_val is None or raw_val == "":
+            # Leave as-is / missing for stream-processor; do not invent defaults.
+            continue
         try:
-            out[field] = float(out.get(field, default))
+            out[field] = float(raw_val)
         except (TypeError, ValueError):
-            issues.append(f"invalid_{field}")
-            out[field] = default
-    out["compute_load_pct"] = max(0.0, min(100.0, float(out["compute_load_pct"])))
-    out["brake_pressure"] = max(0.0, float(out["brake_pressure"]))
+            # Non-numeric optional metric: leave original value for QA to reject.
+            pass
 
-    sensor = str(out.get("sensor_status") or "SENSOR_STATUS_UNSPECIFIED")
-    if sensor not in _VALID_SENSOR:
-        issues.append("invalid_sensor_status")
-        sensor = "SENSOR_STATUS_DEGRADED"
-    out["sensor_status"] = sensor
-
-    device = str(out.get("device_type") or "DEVICE_TYPE_UNSPECIFIED")
-    if device not in _VALID_DEVICE:
-        issues.append("invalid_device_type")
-        device = "DEVICE_TYPE_SIMULATOR"
-    out["device_type"] = device
-
-    hw = str(out.get("hardware_version") or "").strip()
-    if not hw:
-        issues.append("missing_hardware_version")
-        hw = "unknown"
-    out["hardware_version"] = hw
-
-    # Strip internal markers before publish.
-    out.pop("_clamped_speed", None)
     return out, issues
+
+
+def build_structural_quarantine(
+    record: dict[str, Any] | None,
+    issues: list[str],
+    *,
+    source_topic: str = "telemetry.raw",
+) -> dict[str, Any]:
+    """
+    Structured DLQ payload matching stream-processor's quarantine schema.
+
+    Fields: rejected_at, source_topic, vehicle_id, field, rule, reason,
+    violations, raw_payload — same shape as
+    ``stream_processor.validation.rules.build_quarantine_record``.
+    """
+    issue = issues[0] if issues else "structural_failure"
+    field_map = {
+        "empty_vehicle_id": ("vehicle_id", "required_nonempty", "vehicle_id is empty"),
+        "unparseable_timestamp": ("timestamp", "iso8601", "timestamp is missing or unparseable"),
+        "non_numeric_gps": ("gps_lat", "type:float", "gps_lat/gps_lon must be numeric"),
+        "non_numeric_speed": ("speed_mph", "type:float", "speed_mph must be numeric"),
+        "decode_failed": ("_payload", "decode", "kafka value could not be decoded"),
+        "avro_encode_failed": ("_payload", "avro_encode", "normalized record not Avro-encodable"),
+    }
+    field, rule, reason = field_map.get(
+        issue, ("_payload", issue, f"structural failure: {issue}")
+    )
+    violations = [
+        {"field": field, "rule": rule, "message": reason}
+        for issue in issues
+        for field, rule, reason in [
+            field_map.get(issue, ("_payload", issue, f"structural failure: {issue}"))
+        ]
+    ]
+    return {
+        "rejected_at": datetime.now(timezone.utc).isoformat(),
+        "source_topic": source_topic,
+        "vehicle_id": (record or {}).get("vehicle_id"),
+        "field": field,
+        "rule": rule,
+        "reason": reason,
+        "violations": violations,
+        "raw_payload": record,
+    }
 
 
 def decode_kafka_value(value: bytes) -> tuple[dict[str, Any] | None, str]:

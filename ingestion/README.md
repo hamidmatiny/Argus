@@ -1,8 +1,18 @@
 # ingestion/
 
 Fleet telemetry **entry point** for ARGUS: a configurable simulator publishes
-Avro `TelemetryEvent` messages to Kafka, and a Ray Core consumer pool normalizes
-them onto a downstream topic.
+Avro `TelemetryEvent` messages to Kafka, and a Ray Core consumer pool
+**pass-through normalizes** them onto a downstream topic.
+
+## Division of responsibility
+
+| Layer | Role |
+|-------|------|
+| **`ray_consumer`** | Decode + unambiguous type coercion only (e.g. numeric string → float, timestamp → ISO-8601). **No** range clamping, **no** enum/default substitution. Structural failures → `telemetry.quarantine`. |
+| **`stream-processor`** | **Single authority** on semantic pass/fail (Pandera-equivalent ranges, enums, vehicle_id regex). Writes `telemetry.validated` / `telemetry.quarantine` / `telemetry.qa_metrics`. |
+
+Do not reintroduce clamping or silent defaults in `normalize_record` — that starves
+QA and drift-monitor of real anomaly signal.
 
 ## Message flow
 
@@ -10,16 +20,22 @@ them onto a downstream topic.
 simulator  --Avro(Confluent)-->  telemetry.raw
                                       │
                           Ray DataStreamer actor pool
-                          (normalize / quarantine)
-                                      │
-                                      ▼
-                               telemetry.normalized
+                          (decode / coerce only)
+                           │                    │
+                           ▼                    ▼
+                 telemetry.normalized    telemetry.quarantine
+                 (pass-through)          (structural only;
+                                          source_topic=telemetry.raw)
+                           │
+                           ▼
+                    stream-processor QA
 ```
 
 | Topic | Producer | Consumer | Payload |
 |-------|----------|----------|---------|
 | `telemetry.raw` | `ingestion/simulator` | `ingestion/ray_consumer` | Confluent-wire Avro `TelemetryEvent` (plus occasional corrupt JSON bytes) |
-| `telemetry.normalized` | `ingestion/ray_consumer` | Flink QA (later) | Clean / repaired Avro `TelemetryEvent` |
+| `telemetry.normalized` | `ingestion/ray_consumer` | `stream-processor` | Pass-through Avro (may still be semantically invalid) |
+| `telemetry.quarantine` | `ray_consumer` + `stream-processor` | ops / lakehouse | Shared DLQ schema; distinguish via `source_topic` |
 
 ## Components
 
@@ -45,13 +61,19 @@ Corruption strategies: `drop_vehicle_id`, `invalid_speed`, `malformed_gps`,
 ### `ray_consumer/`
 
 Sentinel-ray-style **DataStreamer** actor pool: one actor per partition,
-concurrent `process_batch` via `ray.get`.
+concurrent `process_batch` via `ray.get`. Pass-through only — see above.
+
+Structural drops (empty `vehicle_id`, unparseable timestamp, non-numeric GPS/speed,
+undecodable payload) are published to `telemetry.quarantine` with the same JSON
+schema as stream-processor (`field`, `rule`, `reason`, `violations`, `raw_payload`,
+`source_topic=telemetry.raw`).
 
 | Flag / env | Default | Meaning |
 |------------|---------|---------|
 | `KAFKA_BROKERS` | `localhost:19092` | Brokers |
 | `INGESTION_RAW_TOPIC` | `telemetry.raw` | Source |
-| `INGESTION_NORMALIZED_TOPIC` | `telemetry.normalized` | Destination |
+| `INGESTION_NORMALIZED_TOPIC` | `telemetry.normalized` | Pass-through destination |
+| `INGESTION_QUARANTINE_TOPIC` | `telemetry.quarantine` | Structural DLQ |
 | `INGESTION_KAFKA_GROUP_ID` | `argus-ingestion` | Consumer group prefix |
 | `RAY_NUM_PARTITIONS` | `2` | Actor pool size (keep ≤ CPUs under 2Gi) |
 | `RAY_NUM_CPUS` | `2` | Local Ray CPUs |
