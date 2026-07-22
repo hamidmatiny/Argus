@@ -6,9 +6,11 @@
 
 ```mermaid
 flowchart LR
-  Devices["Fleet devices"] --> Kafka["Kafka / Redpanda"]
-  Kafka --> Ray["Ray ingestion"]
-  Ray --> Flink["Flink QA gate"]
+  Sim["ingestion/simulator"] --> Kafka["Kafka / Redpanda"]
+  Devices["Fleet devices / SDKs"] --> Kafka
+  Kafka --> Ray["ingestion/ray_consumer<br/>DataStreamer actors"]
+  Ray --> NormTopic["telemetry.normalized"]
+  NormTopic --> Flink["Flink QA gate"]
   Flink --> Iceberg["Iceberg lakehouse"]
   Iceberg --> Dagster["Dagster orchestration"]
   Dagster --> Drift["drift-monitor"]
@@ -22,27 +24,26 @@ flowchart LR
 ```
 
 ```text
-fleet devices
-      │
-      ▼
- Kafka / Redpanda
-      │
-      ▼
- Ray ingestion ──► Flink QA gate ──► Iceberg lakehouse
-                                          │
-                                          ▼
-                                   Dagster orchestration
-                                          │
-                                          ▼
-                                   drift-monitor
-                                          │
-                                          ▼
-                                   incident-engine
-                                          │
-                    ┌─────────────────────┼─────────────────────┐
-                    ▼                     ▼                     ▼
-              observability            dashboard            ai-copilot
-              (OTel / SLOs)         (ops UI)          (query / explain)
+ingestion/simulator ──► Kafka/Redpanda (telemetry.raw)
+fleet devices/SDKs  ──┘         │
+                                ▼
+              Ray ingestion (DataStreamer actor pool)
+                                │
+                                ▼
+                      telemetry.normalized
+                                │
+                                ▼
+ Flink QA gate ──► Iceberg lakehouse ──► Dagster orchestration
+                                                │
+                                                ▼
+                                         drift-monitor
+                                                │
+                                                ▼
+                                         incident-engine
+                                                │
+                      ┌─────────────────────────┼─────────────────────────┐
+                      ▼                         ▼                         ▼
+                observability               dashboard                 ai-copilot
 ```
 
 ## Monorepo layout
@@ -50,7 +51,7 @@ fleet devices
 | Path | Language | Purpose | Stage |
 |------|----------|---------|-------|
 | `shared/` | Multi | Contracts, schemas, shared libs | Phase 1 |
-| `ingestion/` | Python (Ray) | Fleet telemetry ingest from Kafka | Later |
+| `ingestion/` | Python (Ray) | Simulator + Ray consumer (raw → normalized) | Phase 2 |
 | `stream-processor/` | Java/Python (Flink) | Streaming data-quality gate | Later |
 | `drift-monitor/` | Python | Feature/prediction drift detection | Later |
 | `lakehouse/` | SQL/Python | Iceberg tables and catalog layout | Later |
@@ -74,7 +75,7 @@ fleet devices
 
 ```bash
 cp .env.example .env
-make up          # Redpanda (Kafka-API) via docker compose
+make up          # Redpanda + Console + simulator + Ray consumer
 make logs        # follow compose logs
 make down        # tear down
 ```

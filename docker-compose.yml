@@ -66,13 +66,88 @@ services:
         condition: service_healthy
 
   # ---------------------------------------------------------------------------
-  # Phase — ingestion (Ray) (placeholder)
+  # Phase 2 — ingestion (simulator + Ray consumer)
+  # Resource limits mirror the 2 CPU / 2Gi pattern used in source fleet services.
   # ---------------------------------------------------------------------------
-  # ingestion:
-  #   build: ./ingestion
-  #   depends_on:
-  #     redpanda:
-  #       condition: service_healthy
+  simulator:
+    build:
+      context: .
+      dockerfile: ingestion/simulator/Dockerfile
+    container_name: argus-simulator
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      SCHEMA_REGISTRY_URL: http://redpanda:8081
+      SIMULATOR_TOPIC: telemetry.raw
+      SIMULATOR_VEHICLES: ${SIMULATOR_VEHICLES:-5}
+      SIMULATOR_RATE: ${SIMULATOR_RATE:-10}
+      SIMULATOR_DURATION: ${SIMULATOR_DURATION:-0}
+      SIMULATOR_FAILURE_RATE: ${SIMULATOR_FAILURE_RATE:-0.05}
+      SIMULATOR_HEALTH_PORT: "8091"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ARGUS_AVRO_SCHEMA_PATH: /app/shared/avro/telemetry_event.avsc
+    ports:
+      - "8091:8091"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8091/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    restart: unless-stopped
+
+  ray-consumer:
+    build:
+      context: .
+      dockerfile: ingestion/ray_consumer/Dockerfile
+    container_name: argus-ray-consumer
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      SCHEMA_REGISTRY_URL: http://redpanda:8081
+      INGESTION_RAW_TOPIC: telemetry.raw
+      INGESTION_NORMALIZED_TOPIC: telemetry.normalized
+      INGESTION_KAFKA_GROUP_ID: argus-ingestion
+      RAY_NUM_PARTITIONS: ${RAY_NUM_PARTITIONS:-4}
+      RAY_NUM_CPUS: ${RAY_NUM_CPUS:-2}
+      RAY_BATCH_SIZE: ${RAY_BATCH_SIZE:-50}
+      RAY_HEALTH_PORT: "8092"
+      RAY_DASHBOARD_HOST: "0.0.0.0"
+      RAY_DASHBOARD_PORT: "8265"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ARGUS_AVRO_SCHEMA_PATH: /app/shared/avro/telemetry_event.avsc
+    ports:
+      - "8092:8092"
+      - "8265:8265"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      simulator:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8092/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    restart: unless-stopped
 
   # ---------------------------------------------------------------------------
   # Phase — stream-processor (Flink QA gate) (placeholder)

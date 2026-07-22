@@ -1,0 +1,1 @@
+"""ARGUS Ray ingestion consumer."""

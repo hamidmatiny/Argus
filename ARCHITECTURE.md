@@ -16,7 +16,7 @@ This document describes the system design for ARGUS: responsibilities, data cont
 |-----------|----------------|
 | **Fleet devices / SDKs** | Emit typed telemetry events (metrics, logs, edge features) to Kafka topics |
 | **Kafka / Redpanda** | Durable, ordered bus between producers and processors |
-| **ingestion (Ray)** | Scale-out consume/normalize; batch toward QA and lakehouse writers |
+| **ingestion (Ray)** | Simulator publishes Avro to `telemetry.raw`; Ray DataStreamer actors normalize to `telemetry.normalized` |
 | **stream-processor (Flink)** | Streaming QA gate: schema, ranges, freshness, quarantine |
 | **lakehouse (Iceberg)** | Bronze → silver → gold tables; time travel; compaction |
 | **orchestration (Dagster)** | Assets, schedules, sensors; ties lakehouse to ML and drift jobs |
@@ -30,8 +30,8 @@ This document describes the system design for ARGUS: responsibilities, data cont
 
 ## Data flow
 
-1. Devices (or `sdk/*`) publish to Kafka topics (`telemetry.raw.*`).
-2. Ray ingestion consumes, normalizes, and republishes / writes toward Flink and bronze landing.
+1. `ingestion/simulator` (or devices / `sdk/*`) publish to Kafka topic `telemetry.raw`.
+2. Ray ingestion (`DataStreamer` actor pool) consumes, normalizes, and republishes to `telemetry.normalized`.
 3. Flink QA enforces contracts; failures go to quarantine topics; passes land in Iceberg bronze/silver.
 4. Dagster materializes gold assets, training/eval jobs, and triggers drift evaluations.
 5. drift-monitor writes findings; incident-engine correlates with QA and SLO breaches.
@@ -81,8 +81,9 @@ Exact IDL files are intentionally deferred to Phase 1 (`make proto` will generat
 ### Local (docker compose)
 
 - **Entry point:** `make up` → `docker compose up -d --build`
-- **Phase 0:** Redpanda only (Kafka-compatible broker)
-- **Later phases:** add services as commented placeholders in `docker-compose.yml` (ingestion, Flink, lakehouse deps, Dagster, drift, incident-engine, gateway, OTel, dashboard, copilot)
+- **Phase 0–1:** Redpanda + Schema Registry / Console
+- **Phase 2:** `simulator` + `ray-consumer` (see `ingestion/`)
+- **Later phases:** Flink, lakehouse deps, Dagster, drift, incident-engine, gateway, OTel, dashboard, copilot (placeholders in compose)
 - **Goal:** a laptop-friendly golden path that exercises contracts without cloud accounts
 
 ### Production (Terraform + EKS + Helm + Argo CD)

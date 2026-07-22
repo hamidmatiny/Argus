@@ -1,0 +1,5 @@
+# Shared runtime deps for ARGUS ingestion (simulator + ray_consumer)
+kafka-python>=2.0.2,<3
+fastavro>=1.9,<2
+ray[default]>=2.9,<3
+pytest>=8.0,<10
