@@ -49,7 +49,7 @@ fleet devices
 
 | Path | Language | Purpose | Stage |
 |------|----------|---------|-------|
-| `shared/` | Multi | Contracts, schemas, shared libs | Phase 1+ |
+| `shared/` | Multi | Contracts, schemas, shared libs | Phase 1 |
 | `ingestion/` | Python (Ray) | Fleet telemetry ingest from Kafka | Later |
 | `stream-processor/` | Java/Python (Flink) | Streaming data-quality gate | Later |
 | `drift-monitor/` | Python | Feature/prediction drift detection | Later |

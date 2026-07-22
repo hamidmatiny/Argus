@@ -49,3 +49,6 @@ crash.log
 *.log
 tmp/
 .cache/
+
+# Contracts local venv
+shared/contracts/.venv/

@@ -1,0 +1,27 @@
+# buf.gen.yaml — generate Go structs and Python protobuf (grpclib-consumable) stubs
+version: v2
+clean: true
+plugins:
+  # Go message structs
+  - remote: buf.build/protocolbuffers/go:v1.36.5
+    out: ../gen/go
+    opt:
+      - paths=source_relative
+
+  # Go gRPC service stubs (ready when RPCs are added)
+  - remote: buf.build/grpc/go:v1.5.1
+    out: ../gen/go
+    opt:
+      - paths=source_relative
+
+  # Python protobuf messages (_pb2.py) — usable with grpclib serializers
+  - remote: buf.build/protocolbuffers/python:v29.3
+    out: ../gen/python
+
+  # Python gRPC stubs (_pb2_grpc.py); grpclib can wrap the same messages
+  - remote: buf.build/grpc/python:v1.69.0
+    out: ../gen/python
+
+  # betterproto dataclasses for grpclib-style Python clients
+  - remote: buf.build/community/danielgtaylor-betterproto:v1.2.5
+    out: ../gen/python/betterproto

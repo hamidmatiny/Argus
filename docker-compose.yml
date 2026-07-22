@@ -1,12 +1,13 @@
 # ARGUS local development stack
-# Phase 0: Redpanda (Kafka-API compatible) only.
-# Later phases will uncomment / add services below.
+# Phase 0: Redpanda (Kafka-API compatible).
+# Phase 1: Schema Registry (built into Redpanda) + Redpanda Console.
 
 name: argus
 
 services:
   # ---------------------------------------------------------------------------
   # Messaging — Redpanda (Kafka API, no ZooKeeper)
+  # Built-in Confluent-compatible Schema Registry on :8081 (host :18081)
   # ---------------------------------------------------------------------------
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v24.2.4
@@ -26,7 +27,7 @@ services:
       - --default-log-level=warn
     ports:
       - "19092:19092" # Kafka API (host)
-      - "18081:18081" # Schema Registry
+      - "18081:18081" # Schema Registry (Confluent-compatible)
       - "18082:18082" # Pandaproxy (HTTP proxy)
     healthcheck:
       test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy.*true'"]
@@ -38,9 +39,31 @@ services:
       - redpanda-data:/var/lib/redpanda/data
 
   # ---------------------------------------------------------------------------
-  # Phase 1+ — shared contracts / schema registry consumers (placeholder)
+  # Phase 1 — Redpanda Console (UI for topics + Schema Registry subjects)
+  # Schema Registry URL points at Redpanda's built-in SR (not a separate Karapace).
   # ---------------------------------------------------------------------------
-  # shared: ...
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.8.5
+    container_name: argus-redpanda-console
+    entrypoint: /bin/sh
+    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda:9092"]
+          schemaRegistry:
+            enabled: true
+            urls: ["http://redpanda:8081"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda:9644"]
+    ports:
+      - "8087:8080"
+    depends_on:
+      redpanda:
+        condition: service_healthy
 
   # ---------------------------------------------------------------------------
   # Phase — ingestion (Ray) (placeholder)

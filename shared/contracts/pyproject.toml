@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "argus-contracts"
+version = "0.1.0"
+description = "ARGUS shared Pydantic/Pandera contracts (v1)"
+readme = "CONTRACT_CHANGELOG.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.6,<3",
+  "pandera[pandas]>=0.20,<1",
+  "pandas>=2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "fastavro>=1.9",
+  "protobuf>=5.26",
+  "grpcio-tools>=1.62",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["v1*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "../gen/python"]

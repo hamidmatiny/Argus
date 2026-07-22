@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package argus.v1;
+
+option go_package = "github.com/argus-platform/argus/shared/gen/go/argus/v1;argusv1";
+
+// DeviceType classifies the emitting hardware class.
+enum DeviceType {
+  DEVICE_TYPE_UNSPECIFIED = 0;
+  DEVICE_TYPE_VEHICLE = 1;
+  DEVICE_TYPE_EDGE_GATEWAY = 2;
+  DEVICE_TYPE_SIMULATOR = 3;
+}
+
+// SensorStatus is the aggregated health of onboard sensors for a sample.
+enum SensorStatus {
+  SENSOR_STATUS_UNSPECIFIED = 0;
+  SENSOR_STATUS_OK = 1;
+  SENSOR_STATUS_DEGRADED = 2;
+  SENSOR_STATUS_FAULT = 3;
+}
+
+// TelemetryEvent is a single fleet telemetry sample on the hot data path.
+// Field names are the cross-service contract; keep Avro + Pydantic/Pandera in sync.
+message TelemetryEvent {
+  // Stable fleet vehicle identifier (e.g. VH-0001234).
+  string vehicle_id = 1;
+  // Trip / session identifier for the current drive cycle.
+  string trip_id = 2;
+  // Event time as RFC 3339 / ISO-8601 UTC string (proto3-friendly; services may
+  // also map to google.protobuf.Timestamp in later versions).
+  string timestamp = 3;
+  // WGS84 latitude degrees.
+  double gps_lat = 4;
+  // WGS84 longitude degrees.
+  double gps_lon = 5;
+  // Ground speed in miles per hour.
+  double speed_mph = 6;
+  // Brake line pressure (normalized 0.0–1.0 or PSI scale as documented by emitters).
+  double brake_pressure = 7;
+  // LiDAR enclosure temperature in Celsius.
+  double lidar_temp_c = 8;
+  // Onboard compute utilization percent (0–100).
+  double compute_load_pct = 9;
+  SensorStatus sensor_status = 10;
+  // Hardware / ECU revision string (e.g. hw-rev-3.2).
+  string hardware_version = 11;
+  DeviceType device_type = 12;
+}

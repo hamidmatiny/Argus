@@ -1,0 +1,76 @@
+{
+  "type": "record",
+  "name": "TelemetryEvent",
+  "namespace": "argus.v1",
+  "doc": "Kafka payload for fleet telemetry. Keep field names aligned with TelemetryEvent proto and Pydantic/Pandera v1 contracts.",
+  "fields": [
+    {
+      "name": "vehicle_id",
+      "type": "string",
+      "doc": "Stable fleet vehicle identifier (e.g. VH-0001234)."
+    },
+    {
+      "name": "trip_id",
+      "type": "string"
+    },
+    {
+      "name": "timestamp",
+      "type": "string",
+      "doc": "RFC 3339 / ISO-8601 UTC timestamp."
+    },
+    {
+      "name": "gps_lat",
+      "type": "double"
+    },
+    {
+      "name": "gps_lon",
+      "type": "double"
+    },
+    {
+      "name": "speed_mph",
+      "type": "double"
+    },
+    {
+      "name": "brake_pressure",
+      "type": "double"
+    },
+    {
+      "name": "lidar_temp_c",
+      "type": "double"
+    },
+    {
+      "name": "compute_load_pct",
+      "type": "double"
+    },
+    {
+      "name": "sensor_status",
+      "type": {
+        "type": "enum",
+        "name": "SensorStatus",
+        "symbols": [
+          "SENSOR_STATUS_UNSPECIFIED",
+          "SENSOR_STATUS_OK",
+          "SENSOR_STATUS_DEGRADED",
+          "SENSOR_STATUS_FAULT"
+        ]
+      }
+    },
+    {
+      "name": "hardware_version",
+      "type": "string"
+    },
+    {
+      "name": "device_type",
+      "type": {
+        "type": "enum",
+        "name": "DeviceType",
+        "symbols": [
+          "DEVICE_TYPE_UNSPECIFIED",
+          "DEVICE_TYPE_VEHICLE",
+          "DEVICE_TYPE_EDGE_GATEWAY",
+          "DEVICE_TYPE_SIMULATOR"
+        ]
+      }
+    }
+  ]
+}

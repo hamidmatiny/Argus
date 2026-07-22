@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package argus.v1;
+
+option go_package = "github.com/argus-platform/argus/shared/gen/go/argus/v1;argusv1";
+
+// IncidentSeverity ranks operational impact.
+enum IncidentSeverity {
+  INCIDENT_SEVERITY_UNSPECIFIED = 0;
+  INCIDENT_SEVERITY_INFO = 1;
+  INCIDENT_SEVERITY_WARNING = 2;
+  INCIDENT_SEVERITY_CRITICAL = 3;
+}
+
+// IncidentStatus tracks lifecycle of an incident record.
+enum IncidentStatus {
+  INCIDENT_STATUS_UNSPECIFIED = 0;
+  INCIDENT_STATUS_OPEN = 1;
+  INCIDENT_STATUS_ACKNOWLEDGED = 2;
+  INCIDENT_STATUS_RESOLVED = 3;
+}
+
+// IncidentEvent is emitted by drift-monitor, QA gates, and SLO evaluators.
+message IncidentEvent {
+  string incident_id = 1;
+  IncidentSeverity severity = 2;
+  // Producing service name (e.g. drift-monitor, stream-processor).
+  string source_service = 3;
+  string metric_name = 4;
+  double threshold = 5;
+  double observed_value = 6;
+  // Event time as RFC 3339 / ISO-8601 UTC string.
+  string timestamp = 7;
+  IncidentStatus status = 8;
+}
