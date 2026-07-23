@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Multi-stage Go build → distroless static (nonroot), CGO disabled.
 
-FROM golang:1.22-bookworm AS builder
+FROM golang:1.25-bookworm AS builder
 WORKDIR /src
 COPY go.mod go.sum* ./
 RUN go mod download

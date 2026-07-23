@@ -254,6 +254,9 @@ jobs:
           - name: ai-copilot
             tag: argus-ai-copilot:ci
     steps:
+      - uses: actions/checkout@v4
+        # Required so trivyignores: .trivyignore is available on the runner.
+
       - uses: actions/download-artifact@v4
         with:
           name: image-${{ matrix.name }}
@@ -264,6 +267,8 @@ jobs:
 
       - name: Trivy scan (fail on HIGH/CRITICAL)
         # Tag must include the leading "v" (0.28.0 does not resolve on the marketplace).
+        # .trivyignore documents transitive Ray/MLflow/sharp/pip CVEs we cannot
+        # patch in-tree yet; Go images are rebuilt on golang:1.24 to clear stdlib.
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ matrix.tag }}
@@ -271,6 +276,7 @@ jobs:
           exit-code: "1"
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
 
   sbom:
     name: SBOM · ${{ matrix.name }}

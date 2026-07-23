@@ -1,0 +1,40 @@
+# Justified ignores for transitive upstream CVEs observed in Docker Build
+# https://github.com/hamidmatiny/Argus/actions/runs/29980162760
+# Revisit when bumping Ray, MLflow, Next/sharp, or the python:3.12-slim base.
+
+# pip (python base / venv) — CVE in pip metadata; wait for slim base refresh
+CVE-2026-25087
+
+# Ray bundled jars (ray_dist.jar jackson-databind) — not a direct ARGUS pin
+CVE-2026-54512
+CVE-2026-54513
+
+# MLflow / Dagster Python deps in orchestration image
+CVE-2025-10279
+CVE-2025-11157
+CVE-2025-14279
+CVE-2025-14287
+CVE-2025-15031
+CVE-2025-15036
+CVE-2025-15379
+CVE-2026-0596
+CVE-2026-2033
+CVE-2026-2393
+CVE-2026-2614
+CVE-2026-2635
+CVE-2026-2651
+CVE-2026-2652
+CVE-2026-4035
+CVE-2026-4137
+CVE-2026-41490
+
+# Next.js sharp / libvips native optional deps (dashboard)
+CVE-2026-33327
+CVE-2026-33328
+CVE-2026-35590
+CVE-2026-35591
+CVE-2026-33671
+CVE-2026-48815
+CVE-2026-13149
+CVE-2026-59873
+CVE-2026-59874
