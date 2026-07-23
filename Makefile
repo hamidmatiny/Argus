@@ -1,6 +1,6 @@
 # ARGUS — root developer targets
 
-.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test cli-test sdk-python-test sdk-typescript-test register-avro logs help
+.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test cli-test sdk-python-test sdk-typescript-test terraform-validate helm-lint register-avro logs help
 
 COMPOSE ?= docker compose
 BUF ?= buf
@@ -150,6 +150,19 @@ sdk-python-test: ## argus-sdk (Python) unit tests against mocked gateway
 
 sdk-typescript-test: ## @argus/sdk unit tests
 	cd sdk/typescript && npm install && npm test
+
+terraform-validate: ## terraform validate (no AWS credentials; -backend=false)
+	@for env in dev staging prod; do \
+	  echo "==> terraform validate $$env"; \
+	  (cd infra/terraform/environments/$$env && terraform init -backend=false -input=false >/dev/null && terraform validate); \
+	done
+
+helm-lint: ## helm lint + template smoke for app charts
+	@for c in ingestion stream-processor drift-monitor lakehouse-writer orchestration incident-engine api-gateway dashboard; do \
+	  echo "==> helm lint $$c"; \
+	  helm lint infra/helm/$$c >/dev/null; \
+	  helm template smoke infra/helm/$$c -f infra/helm/$$c/values.yaml -f infra/helm/$$c/values/dev.yaml >/dev/null; \
+	done
 
 register-avro: ## Register TelemetryEvent Avro schema with local Schema Registry
 	bash shared/avro/register.sh

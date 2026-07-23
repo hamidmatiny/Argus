@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argus-incident-engine
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: argus
+    argus.io/chart: incident-engine
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/hamidmatiny/Argus.git
+    targetRevision: HEAD
+    path: infra/helm/incident-engine
+    helm:
+      valueFiles:
+        - values.yaml
+        - values/dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argus
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

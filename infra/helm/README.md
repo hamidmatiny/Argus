@@ -1,10 +1,11 @@
 # infra/helm
 
-Helm charts for deploying ARGUS microservices and platform dependencies onto Kubernetes.
+One chart per deployable ARGUS service, plus `observability` (kube-prometheus-stack).
 
-**Status:** Scaffold only — implemented in a later phase.
+```bash
+helm lint ingestion
+helm template smoke ingestion -f ingestion/values.yaml -f ingestion/values/dev.yaml
+```
 
-**Responsibilities (planned):**
-- Per-service charts and an umbrella chart
-- Values overlays for staging / production
-- Health probes, resources, and OTel sidecars/annotations
+NetworkPolicies are **on by default** — egress only to DNS, declared peer
+services, and `networkPolicy.egressCIDRs` (set to your VPC CIDR in each env).

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: stream-processor
+description: QA gate Flink/local processor
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -98,15 +98,15 @@ Exact IDL files are intentionally deferred to Phase 1 (`make proto` will generat
 - **Phase 0–1:** Redpanda + Schema Registry / Console
 - **Phase 2:** `simulator` + `ray-consumer` (see `ingestion/`)
 - **Phase 3:** Flink JobManager/TaskManager + `stream-processor` QA gate
-- **Phases 1–11 (local compose):** messaging → ingestion → QA → drift → lakehouse → Dagster/MLflow → incident-engine → observability → api-gateway → dashboard → SDKs/`argusctl`
-- **Later phases:** copilot, cloud infra
+- **Phases 1–12 (local + prod IaC):** messaging → … → dashboard → SDKs/`argusctl` → Terraform/Helm/Argo CD (apply only with explicit credentials)
+- **Later phases:** copilot, optional cloud apply/runbooks
 - **Goal:** a laptop-friendly golden path that exercises contracts without cloud accounts
 
 ### Production (Terraform + EKS + Helm + Argo CD)
 
-- **Terraform (`infra/terraform`)**: VPC, EKS, IAM/IRSA, object storage, managed Kafka-compatible or self-managed on K8s, observability backends
-- **Helm (`infra/helm`)**: per-service charts, probes, resources, OTel annotations
-- **Argo CD (`infra/argocd`)**: GitOps sync, environment promotion, drift detection of desired state
+- **Terraform (`infra/terraform`)**: VPC, EKS + IRSA, MSK, S3/Glue Iceberg lakehouse (hydra-style)
+- **Helm (`infra/helm`)**: per-service charts, probes, HPA, NetworkPolicies, kube-prometheus-stack
+- **Argo CD (`infra/argocd`)**: app-of-apps, env promotion (see `PROMOTION.md`)
 - **Parity rule:** same images and config shape as compose; only infrastructure and scale differ
 
 ## Non-goals (for now)

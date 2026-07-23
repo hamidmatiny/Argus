@@ -1,10 +1,11 @@
 # infra/terraform
 
-Terraform modules and root stacks for production ARGUS infrastructure (typically AWS EKS, networking, IAM, and managed data services).
+Modules and per-environment roots for ARGUS on AWS.
 
-**Status:** Scaffold only — implemented in a later phase.
+```bash
+cd environments/dev
+terraform init -backend=false
+terraform validate
+```
 
-**Responsibilities (planned):**
-- VPC, EKS, IRSA, and cluster add-ons
-- Object storage / catalogs for Iceberg
-- Kafka-compatible and observability backends in cloud
+See [../README.md](../README.md) for deploy steps and remote state bootstrap.

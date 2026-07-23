@@ -1,0 +1,46 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/argus-platform/lakehouse-writer
+  pullPolicy: IfNotPresent
+  tag: "0.1.0"
+
+serviceAccount:
+  create: true
+  name: "lakehouse-writer"
+  annotations: {}
+  # Set per-env: eks.amazonaws.com/role-arn: arn:aws:iam::...:role/...
+
+service:
+  type: ClusterIP
+  port: 8096
+
+probes:
+  livenessPath: /health
+  readinessPath: /health
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+networkPolicy:
+  enabled: true
+  allowIngressFrom: []
+  allowEgressTo: []
+  # VPC CIDR + AWS API prefixes filled per environment values
+  egressCIDRs:
+    - 10.0.0.0/8
+
+env:
+  ARGUS_ENV: "dev"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.argus.svc:4317"

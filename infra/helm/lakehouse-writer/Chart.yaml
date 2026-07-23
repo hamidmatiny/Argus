@@ -1,0 +1,6 @@
+apiVersion: v2
+name: lakehouse-writer
+description: Iceberg writer (IRSA → S3 + Glue)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

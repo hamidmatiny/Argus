@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-argus-scrape-notes
+  labels:
+    app.kubernetes.io/name: observability
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  README: |
+    Deploy ServiceMonitors in the argus namespace labeling
+    release={{ .Release.Name }} so kube-prometheus-stack picks them up.
+    Target paths: /metrics on api-gateway, incident-engine, stream-processor, etc.

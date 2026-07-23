@@ -1,0 +1,11 @@
+apiVersion: v2
+name: observability
+description: ARGUS observability stack (kube-prometheus-stack + Loki/Tempo hooks)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: kube-prometheus-stack
+    version: "61.3.2"
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: kube-prometheus-stack.enabled

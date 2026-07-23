@@ -1,0 +1,12 @@
+# Environment overlay: prod
+replicaCount: 3
+resources:
+  limits:
+    cpu: "2"
+    memory: 2Gi
+env:
+  ARGUS_ENV: "prod"
+autoscaling:
+  enabled: false
+  minReplicas: 3
+  maxReplicas: 3

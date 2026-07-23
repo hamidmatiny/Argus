@@ -71,9 +71,9 @@ fleet devices/SDKs  ──┘       │
 | `cli/` | Go | Operator CLI (`argusctl`), secrets + gateway ops | Phase 11 |
 | `examples/` | Multi | Third-party integration samples | Phase 11 |
 | `ai-copilot/` | Python | NL query/explain over platform data | Later |
-| `infra/terraform/` | HCL | Cloud/EKS foundation | Later |
-| `infra/helm/` | YAML | Kubernetes charts | Later |
-| `infra/argocd/` | YAML | GitOps applications | Later |
+| `infra/terraform/` | HCL | VPC, EKS, MSK, Iceberg/S3+Glue, IRSA | Phase 12 |
+| `infra/helm/` | YAML | Per-service charts + NetworkPolicies/HPA | Phase 12 |
+| `infra/argocd/` | YAML | App-of-apps GitOps | Phase 12 |
 | `docs/` | Markdown | ADRs, runbooks, guides | Ongoing |
 | `tests/e2e/` | Multi | Cross-service golden-path tests | Later |
 

@@ -1,0 +1,12 @@
+# Environment overlay: dev
+replicaCount: 1
+resources:
+  limits:
+    cpu: "500m"
+    memory: 1Gi
+env:
+  ARGUS_ENV: "dev"
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 1

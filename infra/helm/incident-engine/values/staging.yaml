@@ -1,0 +1,12 @@
+# Environment overlay: staging
+replicaCount: 2
+resources:
+  limits:
+    cpu: "1"
+    memory: 1Gi
+env:
+  ARGUS_ENV: "staging"
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 2

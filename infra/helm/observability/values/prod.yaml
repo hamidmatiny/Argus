@@ -1,0 +1,13 @@
+# Environment overlay: prod
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      retention: 30d
+      replicas: 2
+      resources:
+        requests:
+          memory: 4Gi
+        limits:
+          memory: 12Gi
+  grafana:
+    replicas: 2

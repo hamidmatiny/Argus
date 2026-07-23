@@ -1,10 +1,11 @@
 # infra/argocd
 
-Argo CD Application and ApplicationSet manifests for GitOps delivery of ARGUS Helm releases.
+GitOps manifests for ARGUS.
 
-**Status:** Scaffold only — implemented in a later phase.
+- `root/application.yaml` — app-of-apps entrypoint
+- `apps/` — one Argo CD `Application` per Helm chart
+- [`PROMOTION.md`](./PROMOTION.md) — dev → staging → prod
 
-**Responsibilities (planned):**
-- App-of-apps bootstrap
-- Environment promotion (dev → staging → prod)
-- Sync policies and health checks
+```bash
+kubectl apply -f root/application.yaml
+```

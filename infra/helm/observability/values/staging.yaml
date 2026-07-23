@@ -1,0 +1,10 @@
+# Environment overlay: staging
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      retention: 15d
+      resources:
+        requests:
+          memory: 2Gi
+        limits:
+          memory: 6Gi

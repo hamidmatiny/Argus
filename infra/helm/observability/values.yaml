@@ -1,0 +1,30 @@
+# ARGUS observability — wraps kube-prometheus-stack with ARGUS defaults.
+kube-prometheus-stack:
+  enabled: true
+  namespaceOverride: argus-observability
+  prometheus:
+    prometheusSpec:
+      retention: 15d
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      resources:
+        requests:
+          cpu: 200m
+          memory: 1Gi
+        limits:
+          memory: 4Gi
+  alertmanager:
+    enabled: true
+  grafana:
+    enabled: true
+    adminPassword: "" # set via ExternalSecret / sealed-secret in real envs
+    defaultDashboardsEnabled: true
+  prometheusOperator:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+
+# Optional sidecar scrapes for ARGUS ServiceMonitors (labels must match)
+argus:
+  scrapeNamespace: argus

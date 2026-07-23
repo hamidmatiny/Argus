@@ -1,0 +1,10 @@
+# Environment overlay: dev
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      retention: 7d
+      resources:
+        requests:
+          memory: 512Mi
+        limits:
+          memory: 2Gi
