@@ -8,7 +8,7 @@
 
 **ARGUS** is a production-shaped fleet telemetry platform: devices stream into a Kafka-compatible bus, Ray and Flink harden the data path, Iceberg + Dagster form the lakehouse spine, and drift / OPA incidents / OpenTelemetry close the loop for operators — with a read-only AI copilot for investigation. Clone it, `docker compose up`, and you get the same contracts and images that target EKS via Terraform, Helm, and Argo CD.
 
-**Docs:** [Getting Started](./docs/getting-started.md) · [Demo Script (5 min)](./docs/DEMO_SCRIPT.md) · [Case Study](./docs/CASE_STUDY.md) · [ADRs](./docs/adr/) · [CHANGELOG v1.0.0](./CHANGELOG.md)
+**Docs:** [Getting Started](./docs/getting-started.md) · [Demo Script (5 min)](./docs/DEMO_SCRIPT.md) · [Case Study](./docs/CASE_STUDY.md) · [Known gaps and what I'd build next](./docs/KNOWN_GAPS.md) · [ADRs](./docs/adr/) · [CHANGELOG v1.0.0](./CHANGELOG.md)
 
 ---
 

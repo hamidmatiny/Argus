@@ -66,6 +66,7 @@ nav:
   - Architecture: architecture.md
   - Demo Script: DEMO_SCRIPT.md
   - Case Study: CASE_STUDY.md
+  - Known Gaps: KNOWN_GAPS.md
   - Components:
       - Overview: components/index.md
       - shared: components/shared.md

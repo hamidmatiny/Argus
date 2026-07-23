@@ -43,6 +43,11 @@ Full write-ups: [ADRs](adr/index.md).
 - **Cost** — tiered storage for quarantine; sample validated telemetry for drift instead of full firehose where acceptable.
 - **Auth** — replace demo API keys with short-lived OIDC + workload identity everywhere (already the prod shape).
 
+## Known gaps (governance & ops maturity)
+
+Scale is only one axis. For deliberate cuts on lineage, secrets backends, audit logs, DR, service mesh,
+chaos fault-injection, and FinOps — see **[Known Gaps & What's Deliberately Out of Scope](KNOWN_GAPS.md)**.
+
 ## Metrics & footprint (local / repo)
 
 Numbers from the v1.0.0 codebase and laptop compose runs (not a cloud load test):
@@ -76,5 +81,6 @@ Drift detection latency is window-based (warmup + sliding window on validated st
 
 - Repo: https://github.com/hamidmatiny/Argus  
 - Demo script: [DEMO_SCRIPT.md](DEMO_SCRIPT.md)  
+- Known gaps: [KNOWN_GAPS.md](KNOWN_GAPS.md)  
 - Architecture: [architecture.md](architecture.md)  
 - Changelog: [CHANGELOG](changelog.md) (`v1.0.0`)
