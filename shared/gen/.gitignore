@@ -8,3 +8,6 @@
 !openapi/**
 !python/
 !python/**
+# Last-match-wins: re-exclude bytecode reintroduced by !python/**
+**/__pycache__/
+**/*.pyc

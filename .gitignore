@@ -63,6 +63,7 @@ stream-processor/.venv/
 # Drift-monitor local venv + generated Evidently/KS reports
 # Compose uses named volume drift-reports-data; keep ignore for local runs.
 drift-monitor/.venv/
+.venv-ci*/
 drift-monitor/reports/*
 !drift-monitor/reports/.gitkeep
 
