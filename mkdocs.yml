@@ -89,6 +89,7 @@ nav:
       - "004 OPA policy engine": adr/004-opa-policy-engine.md
       - "005 Read-only AI copilot": adr/005-read-only-ai-copilot.md
       - "006 Local/prod parity": adr/006-local-prod-parity.md
+      - "007 Serverless ETL alongside Kafka": adr/007-serverless-etl-alongside-kafka.md
   - Operations Runbook: operations-runbook.md
   - Changelog: changelog.md
 

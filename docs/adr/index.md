@@ -10,3 +10,4 @@ Short records of the biggest technology choices in ARGUS. Each ADR states the co
 | [004](004-opa-policy-engine.md) | OPA/Rego for incidents + gateway RBAC | Accepted |
 | [005](005-read-only-ai-copilot.md) | Read-only AI copilot (no mutating tools) | Accepted |
 | [006](006-local-prod-parity.md) | Compose ↔ EKS image/config parity | Accepted |
+| [007](007-serverless-etl-alongside-kafka.md) | Serverless ETL demo alongside Kafka/Dagster | Accepted |

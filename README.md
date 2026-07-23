@@ -117,7 +117,7 @@ Also see `dashboard/docs/screenshots/*.png.txt` markers.
 |----------|----------------|
 | **Streaming** | Apache Kafka API, Redpanda, Amazon MSK, Ray, Apache Flink / PyFlink |
 | **Storage** | Apache Iceberg, MinIO, Amazon S3, AWS Glue, Trino, Parquet |
-| **Orchestration** | Dagster, Feast *(optional)* |
+| **Orchestration** | Dagster, Feast *(optional)*; AWS Lambda + Step Functions + EventBridge + SQS *(serverless ETL demo — not the production Kafka path; see [ADR 007](./docs/adr/007-serverless-etl-alongside-kafka.md))* |
 | **ML** | MLflow, Evidently, SciPy KS tests, embeddings (hash / OpenAI) |
 | **Observability** | OpenTelemetry, Prometheus, Grafana, Loki, Promtail, Jaeger, Alertmanager |
 | **Security** | Keycloak (OIDC), OPA/Rego, API keys + RBAC, Trivy, Syft SBOM, Semgrep |

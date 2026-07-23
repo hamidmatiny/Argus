@@ -112,6 +112,19 @@ module "iam" {
   tags                 = local.tags
 }
 
+# Parallel AWS-native demo path (Lambda/Step Functions) — not the Kafka/Iceberg writer.
+# enable_eventbridge_schedule defaults false so apply does not start daily billing.
+module "serverless_etl" {
+  source                 = "../../modules/serverless-etl"
+  name                   = local.name
+  environment            = var.environment
+  lakehouse_bucket_id    = module.iceberg_lakehouse.bucket_id
+  lakehouse_bucket_arn   = module.iceberg_lakehouse.bucket_arn
+  glue_database_name     = module.iceberg_lakehouse.glue_database_name
+  enable_eventbridge_schedule = false
+  tags                   = local.tags
+}
+
 output "cluster_name" {
   value = module.eks.cluster_name
 }
@@ -126,4 +139,16 @@ output "iceberg_warehouse_uri" {
 
 output "irsa_role_arns" {
   value = module.iam.role_arns
+}
+
+output "serverless_etl_state_machine_arn" {
+  value = module.serverless_etl.state_machine_arn
+}
+
+output "serverless_etl_ecr_repository_url" {
+  value = module.serverless_etl.ecr_repository_url
+}
+
+output "serverless_etl_glue_table" {
+  value = module.serverless_etl.glue_table_fqn
 }
