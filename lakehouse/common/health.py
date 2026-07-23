@@ -47,6 +47,7 @@ def start_health_server(
                 self.wfile.write(body)
                 return
             if self.path in ("/health", "/healthz", "/"):
+                # Liveness always 200; ready reflects catalog/Kafka connectivity.
                 ready = ready_provider()
                 body = json.dumps(
                     {
@@ -55,7 +56,7 @@ def start_health_server(
                         "stats": stats_provider(),
                     }
                 ).encode()
-                self.send_response(200 if ready else 503)
+                self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()

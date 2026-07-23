@@ -171,18 +171,37 @@ def run() -> int:
     _stats["baseline_ready"] = analyzer.baseline_ready
     _stats["baseline_source"] = analyzer.baseline_source
 
-    publisher = IncidentPublisher(brokers=KAFKA_BROKERS, topic=INCIDENTS_TOPIC)
-    consumer = KafkaConsumer(
-        SOURCE_TOPIC,
-        bootstrap_servers=[b.strip() for b in KAFKA_BROKERS.split(",") if b.strip()],
-        group_id=GROUP_ID,
-        client_id="argus-drift-monitor",
-        enable_auto_commit=True,
-        # latest: build the live baseline from current traffic, not mixed
-        # historical eras left in the topic across simulator restarts.
-        auto_offset_reset=os.getenv("DRIFT_AUTO_OFFSET_RESET", "latest"),
-        consumer_timeout_ms=1000,
-    )
+    publisher: IncidentPublisher | None = None
+    consumer = None
+    while (publisher is None or consumer is None) and not _shutdown.is_set():
+        try:
+            publisher = IncidentPublisher(
+                brokers=KAFKA_BROKERS, topic=INCIDENTS_TOPIC
+            )
+            consumer = KafkaConsumer(
+                SOURCE_TOPIC,
+                bootstrap_servers=[
+                    b.strip() for b in KAFKA_BROKERS.split(",") if b.strip()
+                ],
+                group_id=GROUP_ID,
+                client_id="argus-drift-monitor",
+                enable_auto_commit=True,
+                # latest: build the live baseline from current traffic, not mixed
+                # historical eras left in the topic across simulator restarts.
+                auto_offset_reset=os.getenv("DRIFT_AUTO_OFFSET_RESET", "latest"),
+                consumer_timeout_ms=1000,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "kafka_connect_retry",
+                extra={"error": str(exc), "brokers": KAFKA_BROKERS},
+            )
+            publisher = None
+            consumer = None
+            time.sleep(2.0)
+    if publisher is None or consumer is None:
+        logger.error("drift_monitor_aborted_no_kafka")
+        return 1
     logger.info(
         "drift_monitor_started",
         extra={

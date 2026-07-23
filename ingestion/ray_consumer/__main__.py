@@ -136,15 +136,27 @@ def run(args: argparse.Namespace) -> int:
         include_dashboard=args.include_dashboard,
     )
     partition_ids = [f"partition-{i}" for i in range(args.partitions)]
-    streamers = create_streamer_pool(
-        partition_ids=partition_ids,
-        brokers=args.broker,
-        source_topic=args.source_topic,
-        dest_topic=args.dest_topic,
-        quarantine_topic=args.quarantine_topic,
-        group_id=args.group_id,
-        schema_registry_url=args.schema_registry,
-    )
+    streamers = None
+    while streamers is None and not _shutdown.is_set():
+        try:
+            streamers = create_streamer_pool(
+                partition_ids=partition_ids,
+                brokers=args.broker,
+                source_topic=args.source_topic,
+                dest_topic=args.dest_topic,
+                quarantine_topic=args.quarantine_topic,
+                group_id=args.group_id,
+                schema_registry_url=args.schema_registry,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "streamer_pool_retry",
+                extra={"error": str(exc), "broker": args.broker},
+            )
+            _shutdown.wait(timeout=2.0)
+    if streamers is None:
+        logger.error("ray_consumer_aborted_no_streamers")
+        return 1
     _ready = True
     logger.info(
         "ray_consumer_started",

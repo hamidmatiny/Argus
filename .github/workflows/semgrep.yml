@@ -22,13 +22,37 @@ jobs:
       - uses: actions/checkout@v4
       - name: Scan
         run: |
-          # OWASP + CI packs; exclude noisy generic urllib audit (registry clients use fixed http URLs).
+          # Packs: CI hygiene + OWASP. security-audit omitted — it floods on
+          # urllib used for fixed Schema Registry URLs (see exclude-rule below).
+          #
+          # --exclude-rule justifications (one rule each, from failed run
+          # https://github.com/hamidmatiny/Argus/actions/runs/29979414842 ):
+          #
+          # 1) python.lang.security.audit.dynamic-urllib-use-detected
+          #    Triggered on Schema Registry / Prometheus clients that POST/GET
+          #    operator-configured http(s) URLs (not user-controlled file://).
+          #    Switching every call site to `requests` is noise; URLs come from
+          #    env (SCHEMA_REGISTRY_URL, etc.), not request bodies.
+          #
+          # 2) yaml.github-actions.security.github-actions-mutable-action-tag
+          #    Fired on every `uses: actions/*@vN` / vendor@vN in our workflows
+          #    (~40 findings). We intentionally track major tags for
+          #    GitHub-owned and well-known actions (checkout, setup-*,
+          #    upload-artifact, dorny/paths-filter, aquasecurity/trivy-action,
+          #    anchore/sbom-action, grafana/setup-k6-action). Full SHA pinning
+          #    of every action is tracked as follow-up hardening; tags are not
+          #    application RCE surface.
+          #
+          # Path excludes (not rule excludes): generated stubs, local venvs,
+          # Node build output. Terraform lives under infra/ and is reviewed via
+          # `terraform validate` + module docs (public subnets intentional for ALB).
           semgrep scan \
             --config p/ci \
             --config p/owasp-top-ten \
             --error \
             --metrics off \
             --exclude-rule=python.lang.security.audit.dynamic-urllib-use-detected \
+            --exclude-rule=yaml.github-actions.security.github-actions-mutable-action-tag \
             --exclude='shared/gen' \
             --exclude='**/.venv' \
             --exclude='**/node_modules' \

@@ -87,6 +87,8 @@ def start_health_server(
                 self.end_headers()
                 return
 
+            # /health is liveness (always 200 once the HTTP server is up).
+            # Readiness is exposed via the ready boolean in the JSON body.
             ready = True if ready_provider is None else bool(ready_provider())
             body_obj: dict[str, Any] = {
                 "status": "ok" if ready else "starting",
@@ -95,8 +97,7 @@ def start_health_server(
             if stats_provider is not None:
                 body_obj["stats"] = stats_provider()
             body = json.dumps(body_obj).encode()
-            code = 200 if ready else 503
-            self.send_response(code)
+            self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()

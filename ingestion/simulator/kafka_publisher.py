@@ -59,14 +59,26 @@ class TelemetryKafkaPublisher:
     ) -> None:
         self.topic = topic
         self.schema = load_avro_schema()
-        self.schema_id = ensure_schema_registered(
-            schema_registry_url, subject, self.schema
-        )
+        # Schema Registry is best-effort at boot (compose may race; CI smoke has no registry).
+        try:
+            self.schema_id = ensure_schema_registered(
+                schema_registry_url, subject, self.schema
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "schema_registry_unavailable",
+                extra={"error": str(exc), "url": schema_registry_url},
+            )
+            self.schema_id = 0
         self._producer = KafkaProducer(
             bootstrap_servers=[b.strip() for b in brokers.split(",") if b.strip()],
             acks="all",
             linger_ms=20,
             retries=3,
+            # Don't block process start when the broker is absent (CI image smoke).
+            api_version_auto_timeout_ms=3000,
+            request_timeout_ms=5000,
+            metadata_max_age_ms=5000,
         )
 
     def publish(

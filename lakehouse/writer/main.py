@@ -90,30 +90,46 @@ def run() -> int:
         writer_name="telemetry",
     )
 
-    catalog = load_iceberg_catalog()
-    table = ensure_table(
-        catalog,
-        namespace=NAMESPACE,
-        table_name=TELEMETRY_TABLE,
-        schema=TELEMETRY_SCHEMA,
-        partition_spec=TELEMETRY_PARTITION_SPEC,
-    )
-    sink = IcebergBatchSink(
-        table,
-        to_arrow=telemetry_rows_to_arrow,
-        batch_size=BATCH_SIZE,
-        flush_interval_sec=FLUSH_INTERVAL_SEC,
-    )
-
-    consumer = KafkaConsumer(
-        VALIDATED_TOPIC,
-        bootstrap_servers=[b.strip() for b in KAFKA_BROKERS.split(",") if b.strip()],
-        group_id=WRITER_GROUP_ID,
-        client_id="argus-lakehouse-writer",
-        enable_auto_commit=True,
-        auto_offset_reset="earliest",
-        consumer_timeout_ms=1000,
-    )
+    sink = None
+    consumer = None
+    while (sink is None or consumer is None) and not _shutdown.is_set():
+        try:
+            catalog = load_iceberg_catalog()
+            table = ensure_table(
+                catalog,
+                namespace=NAMESPACE,
+                table_name=TELEMETRY_TABLE,
+                schema=TELEMETRY_SCHEMA,
+                partition_spec=TELEMETRY_PARTITION_SPEC,
+            )
+            sink = IcebergBatchSink(
+                table,
+                to_arrow=telemetry_rows_to_arrow,
+                batch_size=BATCH_SIZE,
+                flush_interval_sec=FLUSH_INTERVAL_SEC,
+            )
+            consumer = KafkaConsumer(
+                VALIDATED_TOPIC,
+                bootstrap_servers=[
+                    b.strip() for b in KAFKA_BROKERS.split(",") if b.strip()
+                ],
+                group_id=WRITER_GROUP_ID,
+                client_id="argus-lakehouse-writer",
+                enable_auto_commit=True,
+                auto_offset_reset="earliest",
+                consumer_timeout_ms=1000,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "lakehouse_connect_retry",
+                extra={"error": str(exc)},
+            )
+            sink = None
+            consumer = None
+            time.sleep(2.0)
+    if sink is None or consumer is None:
+        logger.error("lakehouse_writer_aborted")
+        return 1
     _ready = True
     logger.info(
         "lakehouse_writer_started",

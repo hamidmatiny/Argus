@@ -86,18 +86,34 @@ def run(args: argparse.Namespace) -> int:
         failure_rate=args.failure_rate,
         seed=args.seed,
     )
-    publisher = TelemetryKafkaPublisher(
-        brokers=args.broker,
-        topic=args.topic,
-        schema_registry_url=args.schema_registry,
-    )
 
+    # Liveness first so CI / compose probes work while Kafka is still coming up.
     start_health_server(
         args.health_port,
         stats_provider=lambda: dict(simulator.stats),
         ready_provider=lambda: True,
         service_name="simulator",
     )
+
+    publisher: TelemetryKafkaPublisher | None = None
+    while publisher is None and not _shutdown.is_set():
+        try:
+            publisher = TelemetryKafkaPublisher(
+                brokers=args.broker,
+                topic=args.topic,
+                schema_registry_url=args.schema_registry,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "kafka_connect_retry",
+                extra={"error": str(exc), "broker": args.broker},
+            )
+            _shutdown.wait(timeout=2.0)
+
+    if publisher is None:
+        logger.error("simulator_aborted_no_kafka")
+        return 1
+
     logger.info(
         "simulator_started",
         extra={
@@ -122,7 +138,10 @@ def run(args: argparse.Namespace) -> int:
             loop_start = time.monotonic()
             record, strategy, raw = simulator.next_message()
             key = (record or {}).get("vehicle_id") or "unknown"
-            publisher.publish(key=key, record=record, raw=raw)
+            try:
+                publisher.publish(key=key, record=record, raw=raw)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("publish_failed", extra={"error": str(exc)})
             if strategy:
                 logger.warning(
                     "corruption_injected",

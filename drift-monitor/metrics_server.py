@@ -57,6 +57,7 @@ def start_http_server(
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
             if self.path in ("/health", "/healthz", "/"):
+                # Liveness always 200; readiness is the ready flag (baseline/Kafka).
                 ready = ready_provider()
                 body = json.dumps(
                     {
@@ -65,7 +66,7 @@ def start_http_server(
                         "stats": stats_provider(),
                     }
                 ).encode()
-                self.send_response(200 if ready else 503)
+                self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()

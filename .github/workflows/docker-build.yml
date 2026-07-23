@@ -1,4 +1,4 @@
-# Build every service image + /health smoke (mirrors vanguard Docker Build, fanned out).
+# Build every service image + smoke (HTTP health or process-alive for consumers).
 name: Docker Build
 
 on:
@@ -49,12 +49,13 @@ jobs:
     name: Build · ${{ matrix.name }}
     runs-on: ubuntu-latest
     outputs:
-      # placeholder so dependents always have a job graph
       done: ${{ steps.meta.outputs.done }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          # smoke=process: Kafka/MinIO consumers — assert process stays up (no broker in this job).
+          # smoke=http: long-running HTTP servers — curl the health path.
           - name: simulator
             context: .
             file: ingestion/simulator/Dockerfile
@@ -62,6 +63,7 @@ jobs:
             port: "8091"
             health: /health
             env: ""
+            smoke: process
           - name: ray-consumer
             context: .
             file: ingestion/ray_consumer/Dockerfile
@@ -69,6 +71,7 @@ jobs:
             port: "8092"
             health: /health
             env: "-e KAFKA_BROKERS=127.0.0.1:9092"
+            smoke: process
           - name: stream-processor
             context: .
             file: stream-processor/Dockerfile
@@ -76,6 +79,7 @@ jobs:
             port: "8093"
             health: /health
             env: "-e KAFKA_BROKERS=127.0.0.1:9092 -e SCHEMA_REGISTRY_URL=http://127.0.0.1:18081"
+            smoke: http
           - name: drift-monitor
             context: .
             file: drift-monitor/Dockerfile
@@ -83,6 +87,7 @@ jobs:
             port: "8094"
             health: /health
             env: "-e KAFKA_BROKERS=127.0.0.1:9092"
+            smoke: process
           - name: lakehouse
             context: .
             file: lakehouse/Dockerfile
@@ -90,6 +95,7 @@ jobs:
             port: "8096"
             health: /health
             env: "-e LAKEHOUSE_MODE=writer"
+            smoke: process
           - name: orchestration
             context: .
             file: orchestration/Dockerfile
@@ -97,6 +103,7 @@ jobs:
             port: "3000"
             health: /server_info
             env: ""
+            smoke: http
           - name: incident-engine
             context: ./incident-engine
             file: incident-engine/Dockerfile
@@ -104,6 +111,7 @@ jobs:
             port: "8098"
             health: /health
             env: "-e KAFKA_BROKERS=127.0.0.1:9092"
+            smoke: http
           - name: api-gateway
             context: .
             file: api-gateway/Dockerfile
@@ -111,6 +119,7 @@ jobs:
             port: "8099"
             health: /health
             env: "-e API_GATEWAY_AUTH_DISABLED=true"
+            smoke: http
           - name: oncall-reporter
             context: ./observability/oncall
             file: observability/oncall/Dockerfile
@@ -118,6 +127,7 @@ jobs:
             port: "8100"
             health: /health
             env: ""
+            smoke: http
           - name: dashboard
             context: .
             file: dashboard/Dockerfile
@@ -125,13 +135,15 @@ jobs:
             port: "3000"
             health: /login
             env: "-e NEXTAUTH_SECRET=ci-build-secret -e NEXTAUTH_URL=http://localhost:3000 -e AUTH_DEMO_OFFLINE=true -e ARGUS_GATEWAY_URL=http://127.0.0.1:8099"
+            smoke: http
           - name: ai-copilot
             context: ./ai-copilot
             file: ai-copilot/Dockerfile
             tag: argus-ai-copilot:ci
             port: "8090"
             health: /health
-            env: "-e LLM_PROVIDER=mock -e EMBEDDING_PROVIDER=hash -e QDRANT_URL=http://127.0.0.1:6333 -e SCHEMA_REGISTRY_URL="
+            env: "-e LLM_PROVIDER=mock -e EMBEDDING_PROVIDER=hash -e QDRANT_URL=http://127.0.0.1:6333"
+            smoke: http
 
     steps:
       - uses: actions/checkout@v4
@@ -142,13 +154,35 @@ jobs:
       - name: Build image
         run: docker build -t "${{ matrix.tag }}" -f "${{ matrix.file }}" "${{ matrix.context }}"
 
-      - name: Smoke health endpoint
+      - name: Smoke
         run: |
           set -euo pipefail
           NAME="smoke-${{ matrix.name }}"
+          MODE="${{ matrix.smoke }}"
           docker rm -f "$NAME" >/dev/null 2>&1 || true
           # shellcheck disable=SC2086
           docker run -d --name "$NAME" -p "${{ matrix.port }}:${{ matrix.port }}" ${{ matrix.env }} "${{ matrix.tag }}"
+
+          if [[ "$MODE" == "process" ]]; then
+            # Consumer / producer workers: no Kafka/MinIO in this job. Soft-fail
+            # connect loops keep the process alive; fail only on immediate crash.
+            sleep 8
+            status="$(docker inspect -f '{{.State.Status}}' "$NAME")"
+            exit_code="$(docker inspect -f '{{.State.ExitCode}}' "$NAME")"
+            echo "status=${status} exit_code=${exit_code}"
+            if [[ "$status" == "running" ]]; then
+              echo "process_alive_ok"
+              docker logs "$NAME" 2>&1 | tail -n 40 || true
+              docker rm -f "$NAME"
+              exit 0
+            fi
+            echo "=== container exited unexpectedly ==="
+            docker logs "$NAME" || true
+            docker rm -f "$NAME" || true
+            exit 1
+          fi
+
+          # HTTP servers: require a successful health/login response.
           for i in $(seq 1 40); do
             if curl -sf "http://127.0.0.1:${{ matrix.port }}${{ matrix.health }}" >/dev/null; then
               echo "healthy after ${i} attempts"
@@ -156,6 +190,14 @@ jobs:
               echo
               docker rm -f "$NAME"
               exit 0
+            fi
+            # Fail fast if the process crashed (don't burn the full timeout).
+            status="$(docker inspect -f '{{.State.Status}}' "$NAME" 2>/dev/null || echo missing)"
+            if [[ "$status" != "running" ]]; then
+              echo "container not running (status=${status}) while waiting for health"
+              docker logs "$NAME" || true
+              docker rm -f "$NAME" || true
+              exit 1
             fi
             sleep 2
           done
@@ -182,6 +224,8 @@ jobs:
   trivy:
     name: Trivy · ${{ matrix.name }}
     needs: docker-build
+    # Only run when every build matrix cell succeeded (avoids skipped Trivy/SBOM).
+    if: ${{ !cancelled() && needs.docker-build.result == 'success' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -230,6 +274,7 @@ jobs:
   sbom:
     name: SBOM · ${{ matrix.name }}
     needs: docker-build
+    if: ${{ !cancelled() && needs.docker-build.result == 'success' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

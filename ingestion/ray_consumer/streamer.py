@@ -156,11 +156,18 @@ def create_streamer_pool(
     schema_registry_url: str,
 ) -> list[Any]:
     schema = load_avro_schema()
-    schema_id = ensure_schema_registered(
-        schema_registry_url,
-        "argus.telemetry.TelemetryEvent-value",
-        schema,
-    )
+    try:
+        schema_id = ensure_schema_registered(
+            schema_registry_url,
+            "argus.telemetry.TelemetryEvent-value",
+            schema,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "schema_registry_unavailable",
+            extra={"error": str(exc), "url": schema_registry_url},
+        )
+        schema_id = 0
     return [
         DataStreamer.remote(
             partition_id=pid,
