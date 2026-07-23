@@ -1,0 +1,35 @@
+# SAST — Semgrep (required check).
+name: Semgrep
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: semgrep-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: Semgrep SAST
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan
+        run: |
+          semgrep scan \
+            --config p/ci \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --error \
+            --metrics off \
+            --exclude='shared/gen' \
+            --exclude='**/.venv' \
+            --exclude='**/node_modules' \
+            --exclude='**/.next' \
+            --exclude='infra/terraform/**/.terraform'

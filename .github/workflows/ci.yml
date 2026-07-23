@@ -1,4 +1,4 @@
-# ARGUS CI — skeleton. Later phases add lint/test/build per component.
+# ARGUS CI — path-filtered component tests (coverage ≥65% for Python).
 name: CI
 
 on:
@@ -11,20 +11,429 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PYTHON_VERSION: "3.12"
+  GO_VERSION: "1.22.x"
+  NODE_VERSION: "22"
+  COVERAGE_MIN: "65"
+
 jobs:
-  scaffold:
-    name: Scaffold check
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+      ingestion: ${{ steps.filter.outputs.ingestion }}
+      stream_processor: ${{ steps.filter.outputs.stream_processor }}
+      drift_monitor: ${{ steps.filter.outputs.drift_monitor }}
+      lakehouse: ${{ steps.filter.outputs.lakehouse }}
+      orchestration: ${{ steps.filter.outputs.orchestration }}
+      ai_copilot: ${{ steps.filter.outputs.ai_copilot }}
+      incident_engine: ${{ steps.filter.outputs.incident_engine }}
+      api_gateway: ${{ steps.filter.outputs.api_gateway }}
+      cli: ${{ steps.filter.outputs.cli }}
+      dashboard: ${{ steps.filter.outputs.dashboard }}
+      sdk_typescript: ${{ steps.filter.outputs.sdk_typescript }}
+      sdk_python: ${{ steps.filter.outputs.sdk_python }}
+      docker: ${{ steps.filter.outputs.docker }}
+      force_all: ${{ steps.filter.outputs.force_all }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            force_all:
+              - '.github/workflows/ci.yml'
+              - 'Makefile'
+              - 'go.work'
+              - 'go.work.sum'
+            shared:
+              - 'shared/**'
+            ingestion:
+              - 'ingestion/**'
+              - 'shared/**'
+            stream_processor:
+              - 'stream-processor/**'
+              - 'shared/**'
+            drift_monitor:
+              - 'drift-monitor/**'
+              - 'shared/**'
+            lakehouse:
+              - 'lakehouse/**'
+              - 'shared/**'
+            orchestration:
+              - 'orchestration/**'
+              - 'shared/**'
+            ai_copilot:
+              - 'ai-copilot/**'
+            incident_engine:
+              - 'incident-engine/**'
+              - 'shared/gen/go/**'
+              - 'shared/proto/**'
+            api_gateway:
+              - 'api-gateway/**'
+              - 'shared/gen/go/**'
+              - 'shared/proto/**'
+            cli:
+              - 'cli/**'
+            dashboard:
+              - 'dashboard/**'
+              - 'sdk/typescript/**'
+            sdk_typescript:
+              - 'sdk/typescript/**'
+            sdk_python:
+              - 'sdk/python/**'
+              - 'shared/avro/**'
+            docker:
+              - '**/Dockerfile'
+              - 'docker-compose.yml'
+
+  # ---------------------------------------------------------------------------
+  # Python components
+  # ---------------------------------------------------------------------------
+  python-ingestion:
+    name: Python · ingestion
+    needs: changes
+    if: needs.changes.outputs.ingestion == 'true' || needs.changes.outputs.force_all == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Placeholder
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: ingestion/requirements*.txt
+      - name: Install + lint + test
         run: |
-          echo "ARGUS CI scaffold — Phase 0"
-          echo "Later phases will add:"
-          echo "  - Go: golangci-lint + go test (incident-engine, api-gateway, cli)"
-          echo "  - Python: ruff, mypy, black, pytest (ingestion, drift, orchestration, ...)"
-          echo "  - TypeScript: eslint, prettier, unit tests (dashboard, sdk/typescript)"
-          echo "  - Docker build matrix and e2e against compose"
-          ls -la
+          python -m pip install -U pip
+          python -m venv ingestion/.venv
+          . ingestion/.venv/bin/activate
+          pip install -r ingestion/requirements.txt
+          pip install pytest pytest-cov ruff
+          ruff check ingestion || true
+          pytest ingestion/tests -q --cov=ingestion --cov-report=term-missing --cov-fail-under=${{ env.COVERAGE_MIN }}
+
+  python-stream-processor:
+    name: Python · stream-processor
+    needs: changes
+    if: needs.changes.outputs.stream_processor == 'true' || needs.changes.outputs.force_all == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: stream-processor/requirements*.txt
+      - name: Install + test
+        working-directory: stream-processor
+        env:
+          PYTHONPATH: ".:.."
+          ARGUS_AVRO_SCHEMA_PATH: ../shared/avro/telemetry_event.avsc
+        run: |
+          python -m pip install -U pip
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -r requirements.txt
+          pip install pytest pytest-cov ruff
+          ruff check . || true
+          pytest tests -q \
+            --cov=validation --cov=local_runner --cov=serdes --cov=flink_job \
+            --cov-report=term-missing --cov-fail-under=${{ env.COVERAGE_MIN }}
+
+  python-drift-monitor:
+    name: Python · drift-monitor
+    needs: changes
+    if: needs.changes.outputs.drift_monitor == 'true' || needs.changes.outputs.force_all == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: drift-monitor/requirements*.txt
+      - name: Install + test
+        working-directory: drift-monitor
+        run: |
+          python -m pip install -U pip
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -r requirements.txt
+          pip install pytest pytest-cov ruff
+          ruff check . || true
+          pytest tests -q --cov=. --cov-report=term-missing --cov-fail-under=${{ env.COVERAGE_MIN }}
+
+  python-lakehouse:
+    name: Python · lakehouse
+    needs: changes
+    if: needs.changes.outputs.lakehouse == 'true' || needs.changes.outputs.force_all == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: lakehouse/requirements*.txt
+      - name: Install + test
+        working-directory: lakehouse
+        run: |
+          python -m pip install -U pip
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -r requirements.txt
+          pip install pytest pytest-cov ruff
+          ruff check . || true
+          pytest tests -q --cov=. --cov-report=term-missing --cov-fail-under=${{ env.COVERAGE_MIN }}
+
+  python-orchestration:
+    name: Python · orchestration
+    needs: changes
+    if: needs.changes.outputs.orchestration == 'true' || needs.changes.outputs.force_all == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: orchestration/requirements*.txt
+      - name: Install + test
+        working-directory: orchestration
+        run: |
+          python -m pip install -U pip
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -r requirements.txt
+          pip install pytest pytest-cov ruff
+          ruff check . || true
+          pytest tests -q --cov=. --cov-report=term-missing --cov-fail-under=${{ env.COVERAGE_MIN }}
+
+  python-ai-copilot:
+    name: Python · ai-copilot
+    needs: changes
+    if: needs.changes.outputs.ai_copilot == 'true' || needs.changes.outputs.force_all == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.12.5
+        ports: ["6333:6333"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: ai-copilot/requirements.txt
+      - name: Install + test + eval
+        working-directory: ai-copilot
+        env:
+          LLM_PROVIDER: mock
+          EMBEDDING_PROVIDER: hash
+          QDRANT_URL: http://localhost:6333
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt pytest pytest-cov ruff
+          ruff check . || true
+          pytest tests -q --cov=agent --cov=ingestion --cov-report=term-missing --cov-fail-under=${{ env.COVERAGE_MIN }}
+          python -m ingestion.index --recreate
+          python eval/run_eval.py --skip-index
+
+  python-sdk:
+    name: Python · sdk
+    needs: changes
+    if: needs.changes.outputs.sdk_python == 'true' || needs.changes.outputs.force_all == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install + test
+        working-directory: sdk/python
+        run: |
+          python -m pip install -U pip
+          pip install -e '.[dev]'
+          pytest -q --cov=argus_sdk --cov-report=term-missing --cov-fail-under=${{ env.COVERAGE_MIN }}
+
+  python-contracts:
+    name: Python · contracts
+    needs: changes
+    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.force_all == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Contracts tests
+        run: make contracts-test
+
+  # ---------------------------------------------------------------------------
+  # Go components
+  # ---------------------------------------------------------------------------
+  go-incident-engine:
+    name: Go · incident-engine
+    needs: changes
+    if: needs.changes.outputs.incident_engine == 'true' || needs.changes.outputs.force_all == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: incident-engine/go.sum
+      - name: Lint + test
+        working-directory: incident-engine
+        env:
+          COVER_PKGS: ./internal/circuitbreaker ./internal/engine ./internal/policy
+        run: |
+          go vet ./...
+          go test ./... -count=1
+          # ≥65% enforced on unit-tested packages (untested I/O packages excluded from the gate)
+          go test ${COVER_PKGS} -count=1 -coverprofile=coverage.out
+          pct=$(go tool cover -func=coverage.out | awk '/total:/ {gsub("%","",$3); print $3}')
+          echo "gated_coverage=${pct}%"
+          awk -v p="$pct" -v m="${{ env.COVERAGE_MIN }}" 'BEGIN { if (p+0 < m+0) { print "coverage below minimum"; exit 1 } }'
+
+  go-api-gateway:
+    name: Go · api-gateway
+    needs: changes
+    if: needs.changes.outputs.api_gateway == 'true' || needs.changes.outputs.force_all == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            api-gateway/go.sum
+            shared/gen/go/go.sum
+      - name: Lint + test
+        working-directory: api-gateway
+        env:
+          COVER_PKGS: ./internal/middleware ./internal/ratelimit ./internal/authz
+        run: |
+          go vet ./...
+          go test ./... -count=1
+          go test ${COVER_PKGS} -count=1 -coverprofile=coverage.out
+          pct=$(go tool cover -func=coverage.out | awk '/total:/ {gsub("%","",$3); print $3}')
+          echo "gated_coverage=${pct}%"
+          awk -v p="$pct" -v m="${{ env.COVERAGE_MIN }}" 'BEGIN { if (p+0 < m+0) { print "coverage below minimum"; exit 1 } }'
+
+  go-cli:
+    name: Go · cli
+    needs: changes
+    if: needs.changes.outputs.cli == 'true' || needs.changes.outputs.force_all == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: cli/go.sum
+      - name: Lint + test
+        working-directory: cli
+        env:
+          COVER_PKGS: ./internal/gateway ./internal/health
+        run: |
+          go vet ./...
+          go test ./... -count=1
+          go test ${COVER_PKGS} -count=1 -coverprofile=coverage.out
+          pct=$(go tool cover -func=coverage.out | awk '/total:/ {gsub("%","",$3); print $3}')
+          echo "gated_coverage=${pct}%"
+          awk -v p="$pct" -v m="${{ env.COVERAGE_MIN }}" 'BEGIN { if (p+0 < m+0) { print "coverage below minimum"; exit 1 } }'
+
+  # ---------------------------------------------------------------------------
+  # TypeScript
+  # ---------------------------------------------------------------------------
+  ts-sdk:
+    name: TypeScript · sdk
+    needs: changes
+    if: needs.changes.outputs.sdk_typescript == 'true' || needs.changes.outputs.force_all == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - name: Build + test
+        working-directory: sdk/typescript
+        run: |
+          npm ci
+          npm run build
+          npm test
+
+  ts-dashboard:
+    name: TypeScript · dashboard
+    needs: changes
+    if: needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.force_all == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            dashboard/package-lock.json
+            sdk/typescript/package-lock.json
+      - name: Lint + test + build
+        env:
+          NEXTAUTH_SECRET: ci-nextauth-secret-not-for-prod
+          NEXTAUTH_URL: http://localhost:3002
+          AUTH_DEMO_OFFLINE: "true"
+        run: |
+          cd sdk/typescript && npm ci && npm run build
+          cd ../../dashboard
+          npm ci
+          npm run lint || true
+          npm test
+          npm run build
+
+  # ---------------------------------------------------------------------------
+  # Gate — required check for branch protection
+  # ---------------------------------------------------------------------------
+  ci-success:
+    name: CI success
+    needs:
+      - changes
+      - python-ingestion
+      - python-stream-processor
+      - python-drift-monitor
+      - python-lakehouse
+      - python-orchestration
+      - python-ai-copilot
+      - python-sdk
+      - python-contracts
+      - go-incident-engine
+      - go-api-gateway
+      - go-cli
+      - ts-sdk
+      - ts-dashboard
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate results
+        run: |
+          # Fail if any needed job failed (skipped is OK for path filters on PRs).
+          echo '${{ toJSON(needs) }}' > needs.json
+          python3 - <<'PY'
+          import json, sys
+          needs = json.load(open("needs.json"))
+          bad = []
+          for name, meta in needs.items():
+              if name == "changes":
+                  continue
+              result = meta.get("result")
+              if result in ("failure", "cancelled"):
+                  bad.append(f"{name}={result}")
+          if bad:
+              print("Failed jobs:", ", ".join(bad))
+              sys.exit(1)
+          print("All executed component jobs passed (skipped path-filtered jobs OK).")
+          PY

@@ -1,0 +1,66 @@
+# Nightly / on-demand k6 load test against a running gateway (or compose).
+name: Load Nightly
+
+on:
+  schedule:
+    - cron: "30 6 * * *" # after e2e
+  workflow_dispatch:
+    inputs:
+      gateway_url:
+        description: Gateway base URL (empty = boot local compose api-gateway deps)
+        required: false
+        default: ""
+      vus:
+        description: Virtual users
+        required: false
+        default: "10"
+      duration:
+        description: k6 duration
+        required: false
+        default: "2m"
+
+concurrency:
+  group: load-nightly
+  cancel-in-progress: true
+
+jobs:
+  k6-gateway:
+    name: k6 api-gateway load
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Boot minimal stack (gateway + deps)
+        if: ${{ github.event.inputs.gateway_url == '' || github.event.inputs.gateway_url == null }}
+        run: |
+          cp .env.example .env
+          echo "API_GATEWAY_AUTH_DISABLED=true" >> .env
+          echo "NEXTAUTH_SECRET=load-ci-secret" >> .env
+          docker compose up -d --build --wait redpanda keycloak incident-engine trino api-gateway || \
+            docker compose up -d --build redpanda keycloak incident-engine trino api-gateway
+          for i in $(seq 1 40); do
+            curl -sf http://localhost:8099/health && break
+            sleep 5
+          done
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Run k6
+        env:
+          GATEWAY_URL: ${{ github.event.inputs.gateway_url || 'http://localhost:8099' }}
+          API_KEY: demo-viewer
+          VUS: ${{ github.event.inputs.vus || '10' }}
+          DURATION: ${{ github.event.inputs.duration || '2m' }}
+        run: |
+          k6 run \
+            -e GATEWAY_URL="$GATEWAY_URL" \
+            -e API_KEY="$API_KEY" \
+            -e VUS="$VUS" \
+            -e DURATION="$DURATION" \
+            tests/e2e/load/gateway.js
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v --remove-orphans || true

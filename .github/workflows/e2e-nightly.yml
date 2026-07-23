@@ -1,0 +1,51 @@
+# Nightly / on-demand full-stack e2e (too heavy for every PR).
+name: E2E Nightly
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 06:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      sim_seconds:
+        description: Seconds to let simulator run before assertions
+        required: false
+        default: "60"
+
+concurrency:
+  group: e2e-nightly
+  cancel-in-progress: true
+
+jobs:
+  e2e-smoke:
+    name: Compose full-stack smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare env
+        run: |
+          cp .env.example .env
+          echo "NEXTAUTH_SECRET=$(openssl rand -base64 32)" >> .env
+          echo "NEXTAUTH_URL=http://localhost:3002" >> .env
+          echo "LLM_PROVIDER=mock" >> .env
+          echo "EMBEDDING_PROVIDER=hash" >> .env
+          echo "API_GATEWAY_AUTH_DISABLED=true" >> .env
+          echo "AUTH_DEMO_OFFLINE=true" >> .env
+
+      - name: Run smoke script
+        env:
+          SIM_SECONDS: ${{ github.event.inputs.sim_seconds || '60' }}
+          E2E_STRICT: "1"
+        run: |
+          chmod +x tests/e2e/smoke.sh
+          ./tests/e2e/smoke.sh
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-compose-logs
+          path: |
+            /tmp/e2e-*.json
+          retention-days: 7

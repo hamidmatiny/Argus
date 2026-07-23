@@ -1,0 +1,281 @@
+# Build every service image + /health smoke (mirrors vanguard Docker Build, fanned out).
+name: Docker Build
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "**/Dockerfile"
+      - "docker-compose.yml"
+      - ".github/workflows/docker-build.yml"
+      - "ingestion/**"
+      - "stream-processor/**"
+      - "drift-monitor/**"
+      - "lakehouse/**"
+      - "orchestration/**"
+      - "incident-engine/**"
+      - "api-gateway/**"
+      - "dashboard/**"
+      - "ai-copilot/**"
+      - "observability/oncall/**"
+      - "sdk/typescript/**"
+      - "shared/**"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "**/Dockerfile"
+      - "docker-compose.yml"
+      - ".github/workflows/docker-build.yml"
+      - "ingestion/**"
+      - "stream-processor/**"
+      - "drift-monitor/**"
+      - "lakehouse/**"
+      - "orchestration/**"
+      - "incident-engine/**"
+      - "api-gateway/**"
+      - "dashboard/**"
+      - "ai-copilot/**"
+      - "observability/oncall/**"
+      - "sdk/typescript/**"
+      - "shared/**"
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-build:
+    name: Build · ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    outputs:
+      # placeholder so dependents always have a job graph
+      done: ${{ steps.meta.outputs.done }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: simulator
+            context: .
+            file: ingestion/simulator/Dockerfile
+            tag: argus-simulator:ci
+            port: "8091"
+            health: /health
+            env: ""
+          - name: ray-consumer
+            context: .
+            file: ingestion/ray_consumer/Dockerfile
+            tag: argus-ray-consumer:ci
+            port: "8092"
+            health: /health
+            env: "-e KAFKA_BROKERS=127.0.0.1:9092"
+          - name: stream-processor
+            context: .
+            file: stream-processor/Dockerfile
+            tag: argus-stream-processor:ci
+            port: "8093"
+            health: /health
+            env: "-e KAFKA_BROKERS=127.0.0.1:9092"
+          - name: drift-monitor
+            context: .
+            file: drift-monitor/Dockerfile
+            tag: argus-drift-monitor:ci
+            port: "8094"
+            health: /health
+            env: "-e KAFKA_BROKERS=127.0.0.1:9092"
+          - name: lakehouse
+            context: .
+            file: lakehouse/Dockerfile
+            tag: argus-lakehouse:ci
+            port: "8096"
+            health: /health
+            env: "-e LAKEHOUSE_MODE=writer"
+          - name: orchestration
+            context: .
+            file: orchestration/Dockerfile
+            tag: argus-orchestration:ci
+            port: "3000"
+            health: /server_info
+            env: ""
+          - name: incident-engine
+            context: ./incident-engine
+            file: Dockerfile
+            tag: argus-incident-engine:ci
+            port: "8098"
+            health: /health
+            env: "-e KAFKA_BROKERS=127.0.0.1:9092"
+          - name: api-gateway
+            context: .
+            file: api-gateway/Dockerfile
+            tag: argus-api-gateway:ci
+            port: "8099"
+            health: /health
+            env: "-e API_GATEWAY_AUTH_DISABLED=true"
+          - name: oncall-reporter
+            context: ./observability/oncall
+            file: Dockerfile
+            tag: argus-oncall:ci
+            port: "8100"
+            health: /health
+            env: ""
+          - name: dashboard
+            context: .
+            file: dashboard/Dockerfile
+            tag: argus-dashboard:ci
+            port: "3000"
+            health: /login
+            env: "-e NEXTAUTH_SECRET=ci-build-secret -e NEXTAUTH_URL=http://localhost:3000 -e AUTH_DEMO_OFFLINE=true -e ARGUS_GATEWAY_URL=http://127.0.0.1:8099"
+          - name: ai-copilot
+            context: ./ai-copilot
+            file: Dockerfile
+            tag: argus-ai-copilot:ci
+            port: "8090"
+            health: /health
+            env: "-e LLM_PROVIDER=mock -e EMBEDDING_PROVIDER=hash -e QDRANT_URL=http://127.0.0.1:6333"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        run: docker build -t "${{ matrix.tag }}" -f "${{ matrix.file }}" "${{ matrix.context }}"
+
+      - name: Smoke health endpoint
+        run: |
+          set -euo pipefail
+          NAME="smoke-${{ matrix.name }}"
+          docker rm -f "$NAME" >/dev/null 2>&1 || true
+          # shellcheck disable=SC2086
+          docker run -d --name "$NAME" -p "${{ matrix.port }}:${{ matrix.port }}" ${{ matrix.env }} "${{ matrix.tag }}"
+          for i in $(seq 1 40); do
+            if curl -sf "http://127.0.0.1:${{ matrix.port }}${{ matrix.health }}" >/dev/null; then
+              echo "healthy after ${i} attempts"
+              curl -sf "http://127.0.0.1:${{ matrix.port }}${{ matrix.health }}" | head -c 300 || true
+              echo
+              docker rm -f "$NAME"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "=== container logs ==="
+          docker logs "$NAME" || true
+          docker rm -f "$NAME" || true
+          exit 1
+
+      - name: Save image
+        run: |
+          mkdir -p /tmp/images
+          docker save "${{ matrix.tag }}" -o "/tmp/images/${{ matrix.name }}.tar"
+
+      - name: Upload image tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.name }}
+          path: /tmp/images/${{ matrix.name }}.tar
+          retention-days: 1
+
+      - id: meta
+        run: echo "done=1" >> "$GITHUB_OUTPUT"
+
+  trivy:
+    name: Trivy · ${{ matrix.name }}
+    needs: docker-build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: simulator
+            tag: argus-simulator:ci
+          - name: ray-consumer
+            tag: argus-ray-consumer:ci
+          - name: stream-processor
+            tag: argus-stream-processor:ci
+          - name: drift-monitor
+            tag: argus-drift-monitor:ci
+          - name: lakehouse
+            tag: argus-lakehouse:ci
+          - name: orchestration
+            tag: argus-orchestration:ci
+          - name: incident-engine
+            tag: argus-incident-engine:ci
+          - name: api-gateway
+            tag: argus-api-gateway:ci
+          - name: oncall-reporter
+            tag: argus-oncall:ci
+          - name: dashboard
+            tag: argus-dashboard:ci
+          - name: ai-copilot
+            tag: argus-ai-copilot:ci
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-${{ matrix.name }}
+          path: /tmp/images
+
+      - name: Load image
+        run: docker load -i "/tmp/images/${{ matrix.name }}.tar"
+
+      - name: Trivy scan (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ matrix.tag }}
+          format: table
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+  sbom:
+    name: SBOM · ${{ matrix.name }}
+    needs: docker-build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: simulator
+            tag: argus-simulator:ci
+          - name: ray-consumer
+            tag: argus-ray-consumer:ci
+          - name: stream-processor
+            tag: argus-stream-processor:ci
+          - name: drift-monitor
+            tag: argus-drift-monitor:ci
+          - name: lakehouse
+            tag: argus-lakehouse:ci
+          - name: orchestration
+            tag: argus-orchestration:ci
+          - name: incident-engine
+            tag: argus-incident-engine:ci
+          - name: api-gateway
+            tag: argus-api-gateway:ci
+          - name: oncall-reporter
+            tag: argus-oncall:ci
+          - name: dashboard
+            tag: argus-dashboard:ci
+          - name: ai-copilot
+            tag: argus-ai-copilot:ci
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-${{ matrix.name }}
+          path: /tmp/images
+
+      - name: Load image
+        run: docker load -i "/tmp/images/${{ matrix.name }}.tar"
+
+      - name: Generate SBOM (syft)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ matrix.tag }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.name }}.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.name }}
+          path: sbom-${{ matrix.name }}.spdx.json
+          retention-days: 30

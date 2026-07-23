@@ -1,0 +1,46 @@
+# Nightly / on-demand chaos: kill a data-plane container and assert recovery.
+name: Chaos Nightly
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # after e2e/load
+  workflow_dispatch:
+
+concurrency:
+  group: chaos-nightly
+  cancel-in-progress: true
+
+jobs:
+  chaos-restart:
+    name: Kill stream-processor → recover
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare env
+        run: |
+          cp .env.example .env
+          echo "NEXTAUTH_SECRET=$(openssl rand -base64 32)" >> .env
+          echo "NEXTAUTH_URL=http://localhost:3002" >> .env
+          echo "LLM_PROVIDER=mock" >> .env
+          echo "EMBEDDING_PROVIDER=hash" >> .env
+          echo "API_GATEWAY_AUTH_DISABLED=true" >> .env
+          echo "AUTH_DEMO_OFFLINE=true" >> .env
+
+      - name: Boot stack
+        run: |
+          docker compose up -d --build --wait || docker compose up -d --build
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8093/health && curl -sf http://localhost:8099/health && break
+            sleep 5
+          done
+
+      - name: Chaos — kill stream-processor
+        run: |
+          chmod +x tests/e2e/chaos.sh
+          ./tests/e2e/chaos.sh
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v --remove-orphans || true
