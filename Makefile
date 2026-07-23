@@ -1,6 +1,6 @@
 # ARGUS — root developer targets
 
-.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test register-avro logs help
+.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test register-avro logs help
 
 COMPOSE ?= docker compose
 BUF ?= buf
@@ -37,7 +37,7 @@ down: ## Stop local stack
 logs: ## Follow compose logs
 	$(COMPOSE) logs -f
 
-test: contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test ## Fan-out tests
+test: contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test ## Fan-out tests
 	@echo "==> test: Go modules (go.work)"
 	@if command -v go >/dev/null 2>&1; then \
 		go work sync 2>/dev/null || true; \
@@ -66,13 +66,16 @@ lint: ## Fan-out linters
 	@echo "==> lint: TypeScript (eslint + prettier when packages exist)"
 	@echo "  skip TypeScript lint (no packages yet)"
 
-proto: ## buf lint + buf generate (Go + Python stubs)
+proto: ## buf lint + buf generate (Go + Python stubs + OpenAPI)
 	@command -v $(BUF) >/dev/null 2>&1 || { echo "error: buf not found — install https://buf.build"; exit 1; }
+	cd shared/proto && $(BUF) dep update
 	cd shared/proto && $(BUF) lint
 	cd shared/proto && $(BUF) generate
-	@mkdir -p shared/gen/python/argus/v1
+	@mkdir -p shared/gen/python/argus/v1 api-gateway/openapi
 	@touch shared/gen/python/argus/__init__.py shared/gen/python/argus/v1/__init__.py
-	@echo "proto: generated shared/gen/{go,python}"
+	@cp -f shared/gen/openapi/argus/v1/gateway.swagger.json api-gateway/openapi/gateway.swagger.json
+	@cd shared/gen/go && go mod tidy
+	@echo "proto: generated shared/gen/{go,python,openapi} + api-gateway/openapi"
 
 $(CONTRACTS_VENV)/bin/pytest: $(CONTRACTS_DIR)/pyproject.toml
 	$(PYTHON) -m venv $(CONTRACTS_VENV)
@@ -135,6 +138,9 @@ orchestration-test: $(ORCH_VENV)/bin/pytest ## Dagster assets + retrain decision
 
 incident-engine-test: ## Circuit breaker FSM + OPA/Rego policy unit tests
 	cd incident-engine && go test ./...
+
+api-gateway-test: ## Gateway middleware, OPA RBAC, mocked upstream integration
+	cd api-gateway && go test ./...
 
 register-avro: ## Register TelemetryEvent Avro schema with local Schema Registry
 	bash shared/avro/register.sh

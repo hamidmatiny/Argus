@@ -679,33 +679,95 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Phase 8 — api-gateway stub (metrics + OTel; full OPA later)
+  # Phase 9 — api-gateway (gRPC + REST, OIDC/Keycloak, OPA, rate limits)
   # ---------------------------------------------------------------------------
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.5
+    container_name: argus-keycloak
+    command: ["start-dev", "--import-realm", "--http-port=8080"]
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8085:8080"
+    volumes:
+      - ./api-gateway/keycloak/argus-realm.json:/opt/keycloak/data/import/argus-realm.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    restart: unless-stopped
+
   api-gateway:
     build:
-      context: ./api-gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: api-gateway/Dockerfile
     container_name: argus-api-gateway
     environment:
       API_GATEWAY_ADDR: ":8099"
+      API_GATEWAY_GRPC_ADDR: ":9099"
+      API_GATEWAY_AUTH_DISABLED: ${API_GATEWAY_AUTH_DISABLED:-false}
+      # Issuer must match the JWT `iss` claim from host token requests (localhost:8085).
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://localhost:8085/realms/argus}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-argus-gateway}
+      # JWKS is fetched from inside the compose network.
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL:-http://keycloak:8080/realms/argus/protocol/openid-connect/certs}
+      API_GATEWAY_POLICY_DIR: /etc/argus/policies
+      API_GATEWAY_OPENAPI_PATH: /etc/argus/openapi/gateway.swagger.json
+      INCIDENT_ENGINE_URL: http://incident-engine:8098
+      TRINO_URL: http://trino:8080
+      TRINO_USER: argus
+      TRINO_CATALOG: iceberg
+      TRINO_SCHEMA: fleet
+      DAGSTER_GRAPHQL_URL: http://dagster-webserver:3000/graphql
+      DAGSTER_LOCATION_NAME: ${DAGSTER_LOCATION_NAME:-argus_orchestration.definitions}
+      DAGSTER_REPOSITORY_NAME: ${DAGSTER_REPOSITORY_NAME:-__repository__}
+      DAGSTER_JOB_NAME: ${DAGSTER_JOB_NAME:-drift_retrain_job}
+      KAFKA_BROKERS: redpanda:9092
+      QA_VALIDATED_TOPIC: ${QA_VALIDATED_TOPIC:-telemetry.validated}
+      SCHEMA_REGISTRY_URL: http://redpanda:8081
+      API_GATEWAY_RATE_LIMIT_RPS: ${API_GATEWAY_RATE_LIMIT_RPS:-20}
+      API_GATEWAY_RATE_LIMIT_BURST: ${API_GATEWAY_RATE_LIMIT_BURST:-40}
+      API_GATEWAY_API_KEYS: ${API_GATEWAY_API_KEYS:-demo-viewer:viewer,demo-operator:operator,demo-admin:admin}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       OTEL_SERVICE_NAME: api-gateway
     ports:
       - "8099:8099"
+      - "9099:9099"
     depends_on:
+      keycloak:
+        condition: service_healthy
       otel-collector:
         condition: service_started
+      incident-engine:
+        condition: service_started
+      trino:
+        condition: service_started
+      dagster-webserver:
+        condition: service_started
+      redpanda:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "/api-gateway", "healthcheck"]
       interval: 15s
       timeout: 5s
-      retries: 6
-      start_period: 10s
+      retries: 8
+      start_period: 20s
     deploy:
       resources:
         limits:
-          cpus: "0.25"
-          memory: 128M
+          cpus: "0.5"
+          memory: 512M
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------

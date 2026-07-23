@@ -63,7 +63,7 @@ fleet devices/SDKs  ──┘       │
 | `lakehouse/` | Python + SQL | Iceberg `fleet.telemetry` / `fleet.quarantine` + Trino | Phase 5 |
 | `orchestration/` | Python (Dagster) | Assets + MLflow retrain lineage (+ optional Feast) | Phase 6 |
 | `incident-engine/` | Go | OPA policies + circuit breaker → `incidents.escalated` | Phase 7 |
-| `api-gateway/` | Go | Edge stub (metrics/traces); full OPA later | Phase 8 stub |
+| `api-gateway/` | Go | gRPC+REST edge, Keycloak OIDC, OPA RBAC | Phase 9 |
 | `observability/` | YAML/+ | Prometheus, Grafana, Loki, Jaeger, Alertmanager | Phase 8 |
 | `ai-copilot/` | Python | NL query/explain over platform data | Later |
 | `dashboard/` | TypeScript | Operator UI | Later |

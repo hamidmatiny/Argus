@@ -295,6 +295,31 @@ func (c *Correlator) resolveVehicleOpenIncidents(vehicleID, reason string) int {
 	return n
 }
 
+// AcknowledgeIncident marks an open incident as acknowledged (still open).
+func (c *Correlator) AcknowledgeIncident(id, note string) (models.IncidentRecord, error) {
+	if id == "" {
+		return models.IncidentRecord{}, fmt.Errorf("incident id required")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i := range c.incidents {
+		inc := &c.incidents[i]
+		if inc.IncidentID != id {
+			continue
+		}
+		if !inc.Open && inc.Status == "resolved" {
+			return models.IncidentRecord{}, fmt.Errorf("incident %q already resolved", id)
+		}
+		inc.Status = "acknowledged"
+		if note != "" {
+			inc.Summary = inc.Summary + " | ack: " + note
+		}
+		inc.LastUpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		return *inc, nil
+	}
+	return models.IncidentRecord{}, fmt.Errorf("incident %q not found", id)
+}
+
 // ResolveIncident manually resolves an incident by ID. Idempotent when already resolved.
 func (c *Correlator) ResolveIncident(id string) (models.IncidentRecord, error) {
 	if id == "" {

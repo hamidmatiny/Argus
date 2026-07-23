@@ -3,11 +3,12 @@ version: v2
 modules:
   - path: .
     name: buf.build/argus-platform/argus
+deps:
+  - buf.build/googleapis/googleapis
 lint:
   use:
     - STANDARD
   except:
-    # Allow *_UNSPECIFIED = 0 (STANDARD already prefers this; kept explicit)
     - PACKAGE_VERSION_SUFFIX
 breaking:
   use:

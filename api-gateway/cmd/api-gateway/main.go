@@ -1,24 +1,20 @@
-// Command api-gateway is a Phase-8 stub: health, Prometheus metrics, and OTel traces.
-// Full authz (OPA) lands in a later phase; this service exists so observability can
-// scrape/trace a north-south edge today.
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"github.com/argus-platform/argus/api-gateway/internal/auth"
+	"github.com/argus-platform/argus/api-gateway/internal/authz"
+	"github.com/argus-platform/argus/api-gateway/internal/config"
+	"github.com/argus-platform/argus/api-gateway/internal/server"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -26,73 +22,85 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 )
 
-var (
-	httpRequests = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "argus_gateway_http_requests_total",
-		Help: "HTTP requests handled by the api-gateway stub",
-	}, []string{"path", "code"})
-	httpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "argus_gateway_http_duration_seconds",
-		Help:    "HTTP request latency",
-		Buckets: prometheus.DefBuckets,
-	}, []string{"path"})
-)
-
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
-	addr := getenv("API_GATEWAY_ADDR", ":8099")
+	cfg := config.Load()
 
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
-		os.Exit(runHealthcheck(addr))
+		os.Exit(runHealthcheck(cfg.HTTPAddr))
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	tp, err := initTracer(ctx)
+	tp, err := initTracer(ctx, cfg.OTELEndpoint)
 	if err != nil {
 		slog.Warn("otel_init_failed", "err", err)
 	} else if tp != nil {
 		defer func() { _ = tp.Shutdown(context.Background()) }()
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", handleHealth)
-	mux.HandleFunc("/healthz", handleHealth)
-	mux.HandleFunc("/readyz", handleHealth)
-	mux.Handle("/metrics", promhttp.Handler())
-	mux.HandleFunc("/v1/ping", handlePing)
-	mux.HandleFunc("/", handleRoot)
-
-	handler := otelhttp.NewHandler(withMetrics(mux), "api-gateway")
-	srv := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
-
-	go func() {
-		slog.Info("http_listen", "addr", addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("http_failed", "err", err)
-			stop()
+	policyDir := cfg.PolicyDir
+	if !filepath.IsAbs(policyDir) {
+		if _, err := os.Stat(policyDir); err != nil {
+			if _, err2 := os.Stat("/etc/argus/policies"); err2 == nil {
+				policyDir = "/etc/argus/policies"
+			}
 		}
-	}()
+	}
+	opa, err := authz.Load(ctx, policyDir)
+	if err != nil {
+		slog.Error("policy_load_failed", "err", err, "dir", policyDir)
+		os.Exit(1)
+	}
 
-	<-ctx.Done()
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	_ = srv.Shutdown(shutdownCtx)
+	var validator *auth.Validator
+	if !cfg.AuthDisabled {
+		v, err := auth.NewValidator(ctx, cfg.OIDCIssuer, cfg.OIDCAudience, cfg.JWKSURL)
+		if err != nil {
+			slog.Warn("oidc_validator_init_failed", "err", err, "hint", "set API_GATEWAY_AUTH_DISABLED=true for local no-auth")
+		} else {
+			validator = v
+			slog.Info("oidc_enabled", "issuer", cfg.OIDCIssuer, "audience", cfg.OIDCAudience)
+		}
+	} else {
+		slog.Warn("auth_disabled", "mode", "dev")
+	}
+
+	openapiPath := getenv("API_GATEWAY_OPENAPI_PATH", "openapi/gateway.swagger.json")
+	if _, err := os.Stat(openapiPath); err != nil {
+		if _, err2 := os.Stat("/etc/argus/openapi/gateway.swagger.json"); err2 == nil {
+			openapiPath = "/etc/argus/openapi/gateway.swagger.json"
+		}
+	}
+
+	app := &server.App{
+		CFG:       cfg,
+		Gateway:   server.NewGatewayFromConfig(cfg),
+		OPA:       opa,
+		Validator: validator,
+		OpenAPI:   server.LoadOpenAPI(openapiPath),
+	}
+
+	slog.Info("api_gateway_starting",
+		"http", cfg.HTTPAddr,
+		"grpc", cfg.GRPCAddr,
+		"auth_disabled", cfg.AuthDisabled,
+	)
+	if err := app.ListenAndServe(ctx); err != nil {
+		slog.Error("server_failed", "err", err)
+		os.Exit(1)
+	}
 }
 
-func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
-	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+func initTracer(ctx context.Context, endpoint string) (*sdktrace.TracerProvider, error) {
 	if endpoint == "" {
 		return nil, nil
 	}
-	exp, err := otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpointURL(normalizeTracesURL(endpoint)),
-	)
+	exp, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(normalizeTracesURL(endpoint)))
 	if err != nil {
 		return nil, err
 	}
-	// Avoid resource.Merge(Default(), ...) — Default() and semconv can disagree on SchemaURL.
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceName("api-gateway"),
@@ -113,67 +121,13 @@ func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
 }
 
 func normalizeTracesURL(endpoint string) string {
-	// Accept host:port or full URL; otlptracehttp WithEndpointURL wants a full URL.
-	if len(endpoint) >= 4 && (endpoint[:4] == "http") {
+	if len(endpoint) >= 4 && endpoint[:4] == "http" {
 		if len(endpoint) < 12 || endpoint[len(endpoint)-11:] != "/v1/traces" {
 			return endpoint + "/v1/traces"
 		}
 		return endpoint
 	}
 	return "http://" + endpoint + "/v1/traces"
-}
-
-func withMetrics(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		ww := &statusWriter{ResponseWriter: w, code: 200}
-		next.ServeHTTP(ww, r)
-		path := r.URL.Path
-		httpRequests.WithLabelValues(path, http.StatusText(ww.code)).Inc()
-		httpDuration.WithLabelValues(path).Observe(time.Since(start).Seconds())
-	})
-}
-
-type statusWriter struct {
-	http.ResponseWriter
-	code int
-}
-
-func (w *statusWriter) WriteHeader(code int) {
-	w.code = code
-	w.ResponseWriter.WriteHeader(code)
-}
-
-func handleHealth(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "api-gateway", "ready": true})
-}
-
-func handlePing(w http.ResponseWriter, r *http.Request) {
-	_, span := otel.Tracer("api-gateway").Start(r.Context(), "ping")
-	defer span.End()
-	span.SetAttributes(attribute.String("argus.route", "/v1/ping"))
-	writeJSON(w, http.StatusOK, map[string]any{"pong": true, "ts": time.Now().UTC().Format(time.RFC3339Nano)})
-}
-
-func handleRoot(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"service": "api-gateway",
-		"phase":   "stub",
-		"routes":  []string{"/health", "/metrics", "/v1/ping"},
-	})
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func getenv(k, def string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return def
 }
 
 func runHealthcheck(addr string) int {
@@ -191,4 +145,11 @@ func runHealthcheck(addr string) int {
 		return 1
 	}
 	return 0
+}
+
+func getenv(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
 }

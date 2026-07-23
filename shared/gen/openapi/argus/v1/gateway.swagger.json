@@ -1,0 +1,463 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "argus/v1/gateway.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "GatewayService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/incidents": {
+      "get": {
+        "summary": "ListIncidents proxies incident-engine open/resolved incidents.",
+        "operationId": "GatewayService_ListIncidents",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListIncidentsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "description": "Optional filter: open | acknowledged | resolved",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "GatewayService"
+        ]
+      }
+    },
+    "/v1/incidents/{incidentId}/acknowledge": {
+      "post": {
+        "summary": "AcknowledgeIncident marks an incident acknowledged (operator/admin).",
+        "operationId": "GatewayService_AcknowledgeIncident",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AcknowledgeIncidentResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/GatewayServiceAcknowledgeIncidentBody"
+            }
+          }
+        ],
+        "tags": [
+          "GatewayService"
+        ]
+      }
+    },
+    "/v1/retraining:trigger": {
+      "post": {
+        "summary": "TriggerRetraining launches Dagster drift_retrain_job via GraphQL (operator/admin).",
+        "operationId": "GatewayService_TriggerRetraining",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1TriggerRetrainingResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1TriggerRetrainingRequest"
+            }
+          }
+        ],
+        "tags": [
+          "GatewayService"
+        ]
+      }
+    },
+    "/v1/telemetry/query": {
+      "post": {
+        "summary": "QueryTelemetry runs a bounded SQL query against Trino (Iceberg fleet tables).",
+        "operationId": "GatewayService_QueryTelemetry",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1QueryTelemetryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1QueryTelemetryRequest"
+            }
+          }
+        ],
+        "tags": [
+          "GatewayService"
+        ]
+      }
+    },
+    "/v1/telemetry/stream": {
+      "get": {
+        "summary": "StreamTelemetry is a server-streaming RPC over Kafka telemetry.validated.",
+        "operationId": "GatewayService_StreamTelemetry",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1StreamTelemetryResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1StreamTelemetryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vehicleId",
+            "description": "Optional vehicle filter; empty = all vehicles.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "GatewayService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "GatewayServiceAcknowledgeIncidentBody": {
+      "type": "object",
+      "properties": {
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "protobufNullValue": {
+      "type": "string",
+      "enum": [
+        "NULL_VALUE"
+      ],
+      "default": "NULL_VALUE",
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1AcknowledgeIncidentResponse": {
+      "type": "object",
+      "properties": {
+        "incident": {
+          "$ref": "#/definitions/v1IncidentSummary"
+        }
+      }
+    },
+    "v1DeviceType": {
+      "type": "string",
+      "enum": [
+        "DEVICE_TYPE_UNSPECIFIED",
+        "DEVICE_TYPE_VEHICLE",
+        "DEVICE_TYPE_EDGE_GATEWAY",
+        "DEVICE_TYPE_SIMULATOR"
+      ],
+      "default": "DEVICE_TYPE_UNSPECIFIED",
+      "description": "DeviceType classifies the emitting hardware class."
+    },
+    "v1IncidentSeverity": {
+      "type": "string",
+      "enum": [
+        "INCIDENT_SEVERITY_UNSPECIFIED",
+        "INCIDENT_SEVERITY_INFO",
+        "INCIDENT_SEVERITY_WARNING",
+        "INCIDENT_SEVERITY_CRITICAL"
+      ],
+      "default": "INCIDENT_SEVERITY_UNSPECIFIED",
+      "description": "IncidentSeverity ranks operational impact."
+    },
+    "v1IncidentStatus": {
+      "type": "string",
+      "enum": [
+        "INCIDENT_STATUS_UNSPECIFIED",
+        "INCIDENT_STATUS_OPEN",
+        "INCIDENT_STATUS_ACKNOWLEDGED",
+        "INCIDENT_STATUS_RESOLVED"
+      ],
+      "default": "INCIDENT_STATUS_UNSPECIFIED",
+      "description": "IncidentStatus tracks lifecycle of an incident record."
+    },
+    "v1IncidentSummary": {
+      "type": "object",
+      "properties": {
+        "incidentId": {
+          "type": "string"
+        },
+        "vehicleId": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/definitions/v1IncidentSeverity"
+        },
+        "status": {
+          "$ref": "#/definitions/v1IncidentStatus"
+        },
+        "sourceService": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ListIncidentsResponse": {
+      "type": "object",
+      "properties": {
+        "incidents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IncidentSummary"
+          }
+        }
+      }
+    },
+    "v1QueryTelemetryRequest": {
+      "type": "object",
+      "properties": {
+        "sql": {
+          "type": "string",
+          "description": "SELECT-only SQL. Default queries fleet.telemetry when empty."
+        },
+        "limit": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1QueryTelemetryResponse": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Each row is a JSON object keyed by column name."
+        },
+        "rowCount": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1SensorStatus": {
+      "type": "string",
+      "enum": [
+        "SENSOR_STATUS_UNSPECIFIED",
+        "SENSOR_STATUS_OK",
+        "SENSOR_STATUS_DEGRADED",
+        "SENSOR_STATUS_FAULT"
+      ],
+      "default": "SENSOR_STATUS_UNSPECIFIED",
+      "description": "SensorStatus is the aggregated health of onboard sensors for a sample."
+    },
+    "v1StreamTelemetryResponse": {
+      "type": "object",
+      "properties": {
+        "event": {
+          "$ref": "#/definitions/v1TelemetryEvent"
+        }
+      }
+    },
+    "v1TelemetryEvent": {
+      "type": "object",
+      "properties": {
+        "vehicleId": {
+          "type": "string",
+          "description": "Stable fleet vehicle identifier (e.g. VH-0001234)."
+        },
+        "tripId": {
+          "type": "string",
+          "description": "Trip / session identifier for the current drive cycle."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Event time as RFC 3339 / ISO-8601 UTC string (proto3-friendly; services may\nalso map to google.protobuf.Timestamp in later versions)."
+        },
+        "gpsLat": {
+          "type": "number",
+          "format": "double",
+          "description": "WGS84 latitude degrees."
+        },
+        "gpsLon": {
+          "type": "number",
+          "format": "double",
+          "description": "WGS84 longitude degrees."
+        },
+        "speedMph": {
+          "type": "number",
+          "format": "double",
+          "description": "Ground speed in miles per hour."
+        },
+        "brakePressure": {
+          "type": "number",
+          "format": "double",
+          "description": "Brake line pressure (normalized 0.0–1.0 or PSI scale as documented by emitters)."
+        },
+        "lidarTempC": {
+          "type": "number",
+          "format": "double",
+          "description": "LiDAR enclosure temperature in Celsius."
+        },
+        "computeLoadPct": {
+          "type": "number",
+          "format": "double",
+          "description": "Onboard compute utilization percent (0–100)."
+        },
+        "sensorStatus": {
+          "$ref": "#/definitions/v1SensorStatus"
+        },
+        "hardwareVersion": {
+          "type": "string",
+          "description": "Hardware / ECU revision string (e.g. hw-rev-3.2)."
+        },
+        "deviceType": {
+          "$ref": "#/definitions/v1DeviceType"
+        }
+      },
+      "description": "TelemetryEvent is a single fleet telemetry sample on the hot data path.\nField names are the cross-service contract; keep Avro + Pydantic/Pandera in sync."
+    },
+    "v1TriggerRetrainingRequest": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1TriggerRetrainingResponse": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

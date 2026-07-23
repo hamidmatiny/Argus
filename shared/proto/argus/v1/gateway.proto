@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package argus.v1;
+
+option go_package = "github.com/argus-platform/argus/shared/gen/go/argus/v1;argusv1";
+
+import "argus/v1/incident.proto";
+import "argus/v1/telemetry.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/struct.proto";
+
+// GatewayService is the governed north-south API for dashboards and SDKs.
+service GatewayService {
+  // QueryTelemetry runs a bounded SQL query against Trino (Iceberg fleet tables).
+  rpc QueryTelemetry(QueryTelemetryRequest) returns (QueryTelemetryResponse) {
+    option (google.api.http) = {
+      post: "/v1/telemetry/query"
+      body: "*"
+    };
+  }
+
+  // ListIncidents proxies incident-engine open/resolved incidents.
+  rpc ListIncidents(ListIncidentsRequest) returns (ListIncidentsResponse) {
+    option (google.api.http) = {
+      get: "/v1/incidents"
+    };
+  }
+
+  // AcknowledgeIncident marks an incident acknowledged (operator/admin).
+  rpc AcknowledgeIncident(AcknowledgeIncidentRequest) returns (AcknowledgeIncidentResponse) {
+    option (google.api.http) = {
+      post: "/v1/incidents/{incident_id}/acknowledge"
+      body: "*"
+    };
+  }
+
+  // TriggerRetraining launches Dagster drift_retrain_job via GraphQL (operator/admin).
+  rpc TriggerRetraining(TriggerRetrainingRequest) returns (TriggerRetrainingResponse) {
+    option (google.api.http) = {
+      post: "/v1/retraining:trigger"
+      body: "*"
+    };
+  }
+
+  // StreamTelemetry is a server-streaming RPC over Kafka telemetry.validated.
+  rpc StreamTelemetry(StreamTelemetryRequest) returns (stream StreamTelemetryResponse) {
+    option (google.api.http) = {
+      get: "/v1/telemetry/stream"
+    };
+  }
+}
+
+message QueryTelemetryRequest {
+  // SELECT-only SQL. Default queries fleet.telemetry when empty.
+  string sql = 1;
+  int32 limit = 2;
+}
+
+message QueryTelemetryResponse {
+  repeated string columns = 1;
+  // Each row is a JSON object keyed by column name.
+  repeated google.protobuf.Struct rows = 2;
+  int32 row_count = 3;
+}
+
+message ListIncidentsRequest {
+  // Optional filter: open | acknowledged | resolved
+  string status = 1;
+}
+
+message ListIncidentsResponse {
+  repeated IncidentSummary incidents = 1;
+}
+
+message IncidentSummary {
+  string incident_id = 1;
+  string vehicle_id = 2;
+  IncidentSeverity severity = 3;
+  IncidentStatus status = 4;
+  string source_service = 5;
+  string timestamp = 6;
+  string reason = 7;
+}
+
+message AcknowledgeIncidentRequest {
+  string incident_id = 1;
+  string note = 2;
+}
+
+message AcknowledgeIncidentResponse {
+  IncidentSummary incident = 1;
+}
+
+message TriggerRetrainingRequest {
+  string reason = 1;
+  map<string, string> tags = 2;
+}
+
+message TriggerRetrainingResponse {
+  string run_id = 1;
+  string status = 2;
+  string message = 3;
+}
+
+message StreamTelemetryRequest {
+  // Optional vehicle filter; empty = all vehicles.
+  string vehicle_id = 1;
+}
+
+message StreamTelemetryResponse {
+  TelemetryEvent event = 1;
+}

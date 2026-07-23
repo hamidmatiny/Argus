@@ -1,0 +1,80 @@
+{
+  "realm": "argus",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "roles": {
+    "realm": [
+      { "name": "viewer", "description": "Read-only ARGUS API access" },
+      { "name": "operator", "description": "Acknowledge incidents and trigger retraining" },
+      { "name": "admin", "description": "Full ARGUS API access" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "argus-gateway",
+      "name": "ARGUS API Gateway",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "protocol": "openid-connect",
+      "rootUrl": "http://localhost:8099",
+      "baseUrl": "http://localhost:8099",
+      "redirectUris": ["http://localhost:*", "http://127.0.0.1:*"],
+      "webOrigins": ["*"],
+      "attributes": {
+        "post.logout.redirect.uris": "+"
+      },
+      "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email"],
+      "optionalClientScopes": ["address", "phone", "offline_access"]
+    },
+    {
+      "clientId": "argus-gateway-cli",
+      "name": "ARGUS Gateway CLI (confidential)",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "argus-gateway-cli-secret",
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "standardFlowEnabled": false,
+      "protocol": "openid-connect"
+    }
+  ],
+  "users": [
+    {
+      "username": "viewer",
+      "enabled": true,
+      "email": "viewer@argus.local",
+      "emailVerified": true,
+      "firstName": "Vera",
+      "lastName": "Viewer",
+      "credentials": [{ "type": "password", "value": "viewer", "temporary": false }],
+      "realmRoles": ["viewer"]
+    },
+    {
+      "username": "operator",
+      "enabled": true,
+      "email": "operator@argus.local",
+      "emailVerified": true,
+      "firstName": "Omar",
+      "lastName": "Operator",
+      "credentials": [{ "type": "password", "value": "operator", "temporary": false }],
+      "realmRoles": ["operator", "viewer"]
+    },
+    {
+      "username": "admin",
+      "enabled": true,
+      "email": "admin@argus.local",
+      "emailVerified": true,
+      "firstName": "Ada",
+      "lastName": "Admin",
+      "credentials": [{ "type": "password", "value": "admin", "temporary": false }],
+      "realmRoles": ["admin", "operator", "viewer"]
+    }
+  ]
+}
