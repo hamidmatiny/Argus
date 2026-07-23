@@ -17,11 +17,17 @@ allow if {
 	startswith(input.path, "/v1/")
 }
 
-# Viewer may also POST read-style telemetry queries
+# Viewer may also POST read-style telemetry queries and copilot asks
 allow if {
 	input.role in {"viewer", "operator", "admin"}
 	input.method == "POST"
 	input.path == "/v1/telemetry/query"
+}
+
+allow if {
+	input.role in {"viewer", "operator", "admin"}
+	input.method == "POST"
+	input.path == "/v1/copilot/ask"
 }
 
 # Operator/admin: acknowledge incidents

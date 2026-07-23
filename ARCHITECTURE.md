@@ -98,8 +98,8 @@ Exact IDL files are intentionally deferred to Phase 1 (`make proto` will generat
 - **Phase 0–1:** Redpanda + Schema Registry / Console
 - **Phase 2:** `simulator` + `ray-consumer` (see `ingestion/`)
 - **Phase 3:** Flink JobManager/TaskManager + `stream-processor` QA gate
-- **Phases 1–12 (local + prod IaC):** messaging → … → dashboard → SDKs/`argusctl` → Terraform/Helm/Argo CD (apply only with explicit credentials)
-- **Later phases:** copilot, optional cloud apply/runbooks
+- **Phases 1–13:** local compose + SDKs/`argusctl` + Terraform/Helm/Argo CD + **ai-copilot** (RAG/tool-calling; apply cloud only with explicit credentials)
+- **Later phases:** optional cloud apply/runbooks hardening
 - **Goal:** a laptop-friendly golden path that exercises contracts without cloud accounts
 
 ### Production (Terraform + EKS + Helm + Argo CD)

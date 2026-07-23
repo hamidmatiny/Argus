@@ -29,7 +29,9 @@ type Config struct {
 	DagsterRepository string
 	DagsterJobName    string
 
-	KafkaBrokers          []string
+	CopilotURL string
+
+	KafkaBrokers        []string
 	KafkaTelemetryTopic   string
 	KafkaGroupID          string
 	SchemaRegistryURL     string
@@ -60,6 +62,7 @@ func Load() Config {
 		DagsterLocation:       getenv("DAGSTER_LOCATION_NAME", "argus_orchestration.definitions"),
 		DagsterRepository:     getenv("DAGSTER_REPOSITORY_NAME", "__repository__"),
 		DagsterJobName:        getenv("DAGSTER_JOB_NAME", "drift_retrain_job"),
+		CopilotURL:            getenv("AI_COPILOT_URL", "http://ai-copilot:8090"),
 		KafkaBrokers:          splitCSV(getenv("KAFKA_BROKERS", "redpanda:9092")),
 		KafkaTelemetryTopic:   getenv("QA_VALIDATED_TOPIC", "telemetry.validated"),
 		KafkaGroupID:          getenv("API_GATEWAY_KAFKA_GROUP_ID", "argus-api-gateway"),

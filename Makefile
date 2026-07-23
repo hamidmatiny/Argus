@@ -1,6 +1,6 @@
 # ARGUS — root developer targets
 
-.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test cli-test sdk-python-test sdk-typescript-test terraform-validate helm-lint register-avro logs help
+.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test cli-test sdk-python-test sdk-typescript-test copilot-test terraform-validate helm-lint register-avro logs help
 
 COMPOSE ?= docker compose
 BUF ?= buf
@@ -150,6 +150,11 @@ sdk-python-test: ## argus-sdk (Python) unit tests against mocked gateway
 
 sdk-typescript-test: ## @argus/sdk unit tests
 	cd sdk/typescript && npm install && npm test
+
+copilot-test: ## ai-copilot guardrail unit tests + eval harness (mock LLM)
+	cd ai-copilot && pip install -q -r requirements.txt && pytest -q tests && \
+	  LLM_PROVIDER=mock EMBEDDING_PROVIDER=hash python eval/run_eval.py --skip-index || \
+	  (LLM_PROVIDER=mock EMBEDDING_PROVIDER=hash python eval/run_eval.py)
 
 terraform-validate: ## terraform validate (no AWS credentials; -backend=false)
 	@for env in dev staging prod; do \

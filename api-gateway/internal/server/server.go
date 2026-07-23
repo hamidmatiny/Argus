@@ -1,11 +1,14 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/argus-platform/argus/api-gateway/internal/auth"
@@ -98,6 +101,7 @@ func (a *App) ListenAndServe(ctx context.Context) error {
 		writeJSON(w, http.StatusOK, map[string]any{"pong": true, "ts": time.Now().UTC().Format(time.RFC3339Nano)})
 	})
 	root.HandleFunc("POST /v1/incidents/{id}/resolve", a.handleResolveIncident)
+	root.HandleFunc("POST /v1/copilot/ask", a.handleCopilotAsk)
 	root.Handle("/", gwmux)
 
 	handler := middleware.Chain(root, middleware.Deps{
@@ -182,6 +186,36 @@ func (a *App) handleResolveIncident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"incident": inc})
+}
+
+func (a *App) handleCopilotAsk(w http.ResponseWriter, r *http.Request) {
+	base := strings.TrimRight(a.CFG.CopilotURL, "/")
+	if base == "" {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "AI_COPILOT_URL not configured"})
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "read body"})
+		return
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, base+"/copilot/ask", bytes.NewReader(body))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error()})
+		return
+	}
+	defer res.Body.Close()
+	out, _ := io.ReadAll(io.LimitReader(res.Body, 4<<20))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(res.StatusCode)
+	_, _ = w.Write(out)
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

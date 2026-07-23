@@ -1,0 +1,56 @@
+[
+  {
+    "incident_id": "esc_vh003_breaker_1402",
+    "vehicle_id": "VH-0003",
+    "severity": "INCIDENT_SEVERITY_CRITICAL",
+    "status": "INCIDENT_STATUS_OPEN",
+    "reason": "circuit breaker open after repeated QA faults",
+    "summary": "Breaker tripped for VH-0003 at 14:02 UTC",
+    "source_service": "incident-engine",
+    "timestamp": "2026-07-22T14:02:00Z",
+    "metrics": {"qa_faults": 5, "breaker_state": "open"}
+  },
+  {
+    "incident_id": "esc_drift_brake_01",
+    "vehicle_id": "fleet",
+    "severity": "INCIDENT_SEVERITY_WARNING",
+    "status": "INCIDENT_STATUS_ACKNOWLEDGED",
+    "reason": "drift detected on brake_pressure",
+    "summary": "KS drift on brake_pressure exceeded threshold",
+    "source_service": "drift-monitor",
+    "timestamp": "2026-07-22T13:40:00Z",
+    "metric_name": "brake_pressure",
+    "observed_value": 0.42,
+    "threshold": 0.2
+  },
+  {
+    "incident_id": "esc_quarantine_spike_01",
+    "vehicle_id": "fleet",
+    "severity": "INCIDENT_SEVERITY_WARNING",
+    "status": "INCIDENT_STATUS_RESOLVED",
+    "reason": "quarantine rate spike",
+    "summary": "QA pass ratio dropped below 99%",
+    "source_service": "stream-processor",
+    "timestamp": "2026-07-21T09:15:00Z"
+  },
+  {
+    "incident_id": "esc_multi_drift_02",
+    "vehicle_id": "fleet",
+    "severity": "INCIDENT_SEVERITY_CRITICAL",
+    "status": "INCIDENT_STATUS_OPEN",
+    "reason": "multi_feature_drift: lidar_temp_c,compute_load_pct,sensor_status",
+    "summary": "Multi-feature drift storm",
+    "source_service": "drift-monitor",
+    "timestamp": "2026-07-22T11:00:00Z"
+  },
+  {
+    "incident_id": "esc_vh007_breaker_retry",
+    "vehicle_id": "VH-0007",
+    "severity": "INCIDENT_SEVERITY_CRITICAL",
+    "status": "INCIDENT_STATUS_OPEN",
+    "reason": "HalfOpen probe failed; breaker re-opened",
+    "summary": "VH-0007 breaker retrip",
+    "source_service": "incident-engine",
+    "timestamp": "2026-07-20T18:22:00Z"
+  }
+]

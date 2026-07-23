@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
+import { CopilotPanel } from "@/components/CopilotPanel";
 
 const links = [
   { href: "/", label: "Overview" },
@@ -70,6 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <main className="min-w-0 px-8 py-7">{children}</main>
+      <CopilotPanel />
     </div>
   );
 }

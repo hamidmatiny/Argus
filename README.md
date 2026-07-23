@@ -70,7 +70,7 @@ fleet devices/SDKs  ──┘       │
 | `sdk/typescript/` | TypeScript | `@argus/sdk` — gateway client | Phase 11 |
 | `cli/` | Go | Operator CLI (`argusctl`), secrets + gateway ops | Phase 11 |
 | `examples/` | Multi | Third-party integration samples | Phase 11 |
-| `ai-copilot/` | Python | NL query/explain over platform data | Later |
+| `ai-copilot/` | Python | RAG + tool-calling ops assistant | Phase 13 |
 | `infra/terraform/` | HCL | VPC, EKS, MSK, Iceberg/S3+Glue, IRSA | Phase 12 |
 | `infra/helm/` | YAML | Per-service charts + NetworkPolicies/HPA | Phase 12 |
 | `infra/argocd/` | YAML | App-of-apps GitOps | Phase 12 |
