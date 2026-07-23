@@ -898,16 +898,57 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
+  # Phase 10 — dashboard (Next.js operator UI)
+  # ---------------------------------------------------------------------------
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+      args:
+        ARGUS_GATEWAY_URL: http://api-gateway:8099
+        KEYCLOAK_ISSUER: http://localhost:8085/realms/argus
+        NEXTAUTH_URL: http://localhost:3002
+    container_name: argus-dashboard
+    environment:
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3002}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-argus-dashboard-dev-secret-change-me}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8085/realms/argus}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-argus-dashboard}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-argus-dashboard-secret}
+      ARGUS_GATEWAY_URL: http://api-gateway:8099
+      PROMETHEUS_URL: http://prometheus:9090
+      DAGSTER_GRAPHQL_URL: http://dagster-webserver:3000/graphql
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      AUTH_DEMO_OFFLINE: ${AUTH_DEMO_OFFLINE:-true}
+    ports:
+      - "3002:3000"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 8
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
   # Phase — ai-copilot (placeholder)
   # ---------------------------------------------------------------------------
   # ai-copilot:
   #   build: ./ai-copilot
 
   # ---------------------------------------------------------------------------
-  # Phase — dashboard (placeholder)
+  # Phase — dashboard (placeholder removed — see Phase 10 above)
   # ---------------------------------------------------------------------------
-  # dashboard:
-  #   build: ./dashboard
 
 volumes:
   redpanda-data:

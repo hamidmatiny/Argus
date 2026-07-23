@@ -25,7 +25,35 @@
       "protocol": "openid-connect",
       "rootUrl": "http://localhost:8099",
       "baseUrl": "http://localhost:8099",
-      "redirectUris": ["http://localhost:*", "http://127.0.0.1:*"],
+      "redirectUris": [
+        "http://localhost:*",
+        "http://127.0.0.1:*",
+        "http://localhost:3002/*",
+        "http://127.0.0.1:3002/*"
+      ],
+      "webOrigins": ["*"],
+      "attributes": {
+        "post.logout.redirect.uris": "+"
+      },
+      "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email"],
+      "optionalClientScopes": ["address", "phone", "offline_access"]
+    },
+    {
+      "clientId": "argus-dashboard",
+      "name": "ARGUS Operator Dashboard",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "argus-dashboard-secret",
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "protocol": "openid-connect",
+      "rootUrl": "http://localhost:3002",
+      "baseUrl": "http://localhost:3002",
+      "redirectUris": [
+        "http://localhost:3002/*",
+        "http://127.0.0.1:3002/*",
+        "http://dashboard:3000/*"
+      ],
       "webOrigins": ["*"],
       "attributes": {
         "post.logout.redirect.uris": "+"

@@ -1,0 +1,30 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Syne:wght@600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #e7eef2;
+  --panel: #f7fafb;
+  --ink: #142027;
+  --muted: #5f717c;
+  --line: #d5dee3;
+  --accent: #1a5f7a;
+  --accent-soft: rgba(26, 95, 122, 0.12);
+  --bg-grid: rgba(26, 40, 48, 0.045);
+}
+
+body {
+  color: var(--ink);
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(var(--bg-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+  background-size: 28px 28px;
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: Syne, "IBM Plex Sans", sans-serif;
+}

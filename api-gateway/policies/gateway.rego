@@ -32,6 +32,14 @@ allow if {
 	startswith(input.path, "/v1/incidents/")
 }
 
+# Operator/admin: resolve incidents
+allow if {
+	input.role in {"operator", "admin"}
+	input.method == "POST"
+	endswith(input.path, "/resolve")
+	startswith(input.path, "/v1/incidents/")
+}
+
 # Operator/admin: trigger retraining
 allow if {
 	input.role in {"operator", "admin"}

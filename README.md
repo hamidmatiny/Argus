@@ -66,7 +66,7 @@ fleet devices/SDKs  ──┘       │
 | `api-gateway/` | Go | gRPC+REST edge, Keycloak OIDC, OPA RBAC | Phase 9 |
 | `observability/` | YAML/+ | Prometheus, Grafana, Loki, Jaeger, Alertmanager | Phase 8 |
 | `ai-copilot/` | Python | NL query/explain over platform data | Later |
-| `dashboard/` | TypeScript | Operator UI | Later |
+| `dashboard/` | TypeScript | Operator UI (Next.js) | Phase 10 |
 | `sdk/python/` | Python | Client SDK for emitters and APIs | Later |
 | `sdk/typescript/` | TypeScript | Client SDK for web/Node | Later |
 | `cli/` | Go | Operator CLI (`argusctl`), secrets | Phase 9+ |

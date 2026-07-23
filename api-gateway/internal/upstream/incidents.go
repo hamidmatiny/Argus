@@ -67,6 +67,22 @@ func (c *IncidentsClient) Acknowledge(ctx context.Context, id, note string) (*In
 	return &out.Incident, nil
 }
 
+// Resolve calls incident-engine resolve.
+func (c *IncidentsClient) Resolve(ctx context.Context, id string) (*Incident, error) {
+	u := strings.TrimRight(c.BaseURL, "/") + "/incidents/" + url.PathEscape(id) + "/resolve"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		Incident Incident `json:"incident"`
+	}
+	if err := c.doJSON(req, &out); err != nil {
+		return nil, err
+	}
+	return &out.Incident, nil
+}
+
 func (c *IncidentsClient) doJSON(req *http.Request, dest any) error {
 	client := c.Client
 	if client == nil {

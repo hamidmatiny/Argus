@@ -97,6 +97,7 @@ func (a *App) ListenAndServe(ctx context.Context) error {
 		defer span.End()
 		writeJSON(w, http.StatusOK, map[string]any{"pong": true, "ts": time.Now().UTC().Format(time.RFC3339Nano)})
 	})
+	root.HandleFunc("POST /v1/incidents/{id}/resolve", a.handleResolveIncident)
 	root.Handle("/", gwmux)
 
 	handler := middleware.Chain(root, middleware.Deps{
@@ -167,6 +168,20 @@ func LoadOpenAPI(path string) []byte {
 
 func handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "api-gateway", "ready": true})
+}
+
+func (a *App) handleResolveIncident(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "incident id required"})
+		return
+	}
+	inc, err := a.Gateway.Incidents.Resolve(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"incident": inc})
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

@@ -207,6 +207,9 @@ func normalizePath(p string) string {
 	if strings.HasPrefix(p, "/v1/incidents/") && strings.HasSuffix(p, "/acknowledge") {
 		return "/v1/incidents/{id}/acknowledge"
 	}
+	if strings.HasPrefix(p, "/v1/incidents/") && strings.HasSuffix(p, "/resolve") {
+		return "/v1/incidents/{id}/resolve"
+	}
 	return p
 }
 

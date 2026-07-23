@@ -98,8 +98,8 @@ Exact IDL files are intentionally deferred to Phase 1 (`make proto` will generat
 - **Phase 0–1:** Redpanda + Schema Registry / Console
 - **Phase 2:** `simulator` + `ray-consumer` (see `ingestion/`)
 - **Phase 3:** Flink JobManager/TaskManager + `stream-processor` QA gate
-- **Phases 1–9 (local compose):** messaging → ingestion → QA → drift → lakehouse → Dagster/MLflow → incident-engine → observability → api-gateway (gRPC/REST, Keycloak OIDC, OPA)
-- **Later phases:** dashboard, copilot, cloud infra
+- **Phases 1–10 (local compose):** messaging → ingestion → QA → drift → lakehouse → Dagster/MLflow → incident-engine → observability → api-gateway (gRPC/REST, Keycloak OIDC, OPA) → dashboard (Next.js `:3002`)
+- **Later phases:** copilot, cloud infra
 - **Goal:** a laptop-friendly golden path that exercises contracts without cloud accounts
 
 ### Production (Terraform + EKS + Helm + Argo CD)
