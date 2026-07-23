@@ -42,8 +42,9 @@ if ! grep -q '^SIMULATOR_FAILURE_RATE=' .env 2>/dev/null; then
   echo "SIMULATOR_FAILURE_RATE=0.15" >> .env
 fi
 
-echo "==> compose up (build)"
-docker compose up -d --build --wait || docker compose up -d --build
+echo "==> compose up (build + wait for healthchecks)"
+# Do not fall back to a wait-less `up` — that races the dashboard health sweep.
+docker compose up -d --build --wait
 
 echo "==> wait for gateway"
 ready=0
@@ -58,6 +59,21 @@ done
 [[ "$ready" -eq 1 ]] || { echo "gateway never became healthy"; exit 1; }
 curl -sf "$GATEWAY/health" | tee /tmp/e2e-gateway-health.json
 
+wait_url() {
+  local url="$1"
+  local attempts="${2:-36}"
+  local i
+  for i in $(seq 1 "$attempts"); do
+    if curl -sf --max-time 10 "$url" >/dev/null; then
+      echo "OK  $url (attempt ${i})"
+      return 0
+    fi
+    sleep 5
+  done
+  echo "FAIL $url (after ${attempts} attempts)"
+  return 1
+}
+
 echo "==> health sweep"
 fail=0
 for url in \
@@ -71,11 +87,11 @@ for url in \
   "http://localhost:8090/health" \
   "http://localhost:3002/login"
 do
-  if curl -sf --max-time 10 "$url" >/dev/null; then
-    echo "OK  $url"
+  # Dashboard (Next.js) often needs tens of seconds after container start.
+  if [[ "$url" == *":3002/"* ]]; then
+    wait_url "$url" 48 || fail=1
   else
-    echo "FAIL $url"
-    fail=1
+    wait_url "$url" 12 || fail=1
   fi
 done
 
@@ -111,9 +127,12 @@ for q in \
   'qa_reject_total' \
   'argus_stream_processor_rejected_total'
 do
-  if curl -sf "http://localhost:9090/api/v1/query?query=${q}" -o "/tmp/e2e-prom-${q}.json" 2>/dev/null; then
-    echo "prom query ${q}:"
-    cat "/tmp/e2e-prom-${q}.json" || true
+  # Sanitize metric names for on-disk paths (GitHub Actions artifacts forbid ':').
+  safe_q="$(printf '%s' "$q" | tr ':"<>|*?/\r\n' '___________')"
+  out="/tmp/e2e-prom-${safe_q}.json"
+  if curl -sfG "http://localhost:9090/api/v1/query" --data-urlencode "query=${q}" -o "$out" 2>/dev/null; then
+    echo "prom query ${q} -> ${out}:"
+    cat "$out" || true
   fi
 done
 # Also scrape stream-processor metrics if exposed
