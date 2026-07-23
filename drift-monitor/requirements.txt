@@ -6,3 +6,4 @@ scipy>=1.11,<2
 prometheus-client>=0.20,<1
 evidently>=0.4.40,<0.5
 pytest>=8.0,<10
+protobuf>=5.26,<6
