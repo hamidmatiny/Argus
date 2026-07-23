@@ -62,7 +62,7 @@ fleet devices/SDKs  ──┘       │
 | `drift-monitor/` | Python | KS + Evidently drift on validated → `incidents.raw` | Phase 4 |
 | `lakehouse/` | Python + SQL | Iceberg `fleet.telemetry` / `fleet.quarantine` + Trino | Phase 5 |
 | `orchestration/` | Python (Dagster) | Assets + MLflow retrain lineage (+ optional Feast) | Phase 6 |
-| `incident-engine/` | Go | Alert correlation and incidents | Later |
+| `incident-engine/` | Go | OPA policies + circuit breaker → `incidents.escalated` | Phase 7 |
 | `api-gateway/` | Go | Authz (OPA), routing, public APIs | Later |
 | `observability/` | YAML/+ | OTel, dashboards, SLO alerts | Later |
 | `ai-copilot/` | Python | NL query/explain over platform data | Later |

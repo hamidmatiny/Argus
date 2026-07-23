@@ -21,7 +21,7 @@ This document describes the system design for ARGUS: responsibilities, data cont
 | **lakehouse (Iceberg)** | Kafka → Iceberg (`fleet.telemetry`, `fleet.quarantine`) via REST/Glue + MinIO/S3; Trino SQL |
 | **orchestration (Dagster)** | Feature-stats / quarantine-audit assets; Evidently → MLflow + Kafka retrain events; optional Feast |
 | **drift-monitor** | KS + embedding + Evidently on `telemetry.validated`; publish `IncidentEvent` to `incidents.raw` |
-| **incident-engine** | Correlate QA/drift/SLO signals into incidents |
+| **incident-engine** | OPA/Rego policies + per-vehicle circuit breaker; escalate to `incidents.escalated` + webhooks |
 | **api-gateway** | Authn/authz (OPA), rate limits, north-south API surface |
 | **observability** | OTel collection, metrics/traces/logs, SLOs and alerts |
 | **dashboard** | Human ops surface for health, incidents, and drill-down |
@@ -71,7 +71,7 @@ Contracts live under `shared/` (schemas evolve in Phase 1+). Design principles:
 
 - **Envelope**: every event has `event_id`, `device_id`, `schema_version`, `event_time`, `ingest_time`, `payload`.
 - **Versioned schemas**: Avro or Protobuf + JSON Schema for API edges; incompatible changes require a new major `schema_version`.
-- **Topics**: `telemetry.raw`, `telemetry.normalized`, `telemetry.validated`, `telemetry.quarantine`, `telemetry.qa_metrics`, `incidents.raw` (drift / future correlators).
+- **Topics**: `telemetry.raw`, `telemetry.normalized`, `telemetry.validated`, `telemetry.quarantine`, `telemetry.qa_metrics`, `incidents.raw`, `incidents.escalated`.
 - **Iceberg**: bronze = raw-ish append; silver = validated/typed; gold = aggregates and feature tables for ML.
 - **API errors**: structured JSON problem details from api-gateway; no free-form strings as the sole error channel.
 

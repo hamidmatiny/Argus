@@ -627,10 +627,52 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Phase — incident-engine (Go) (placeholder)
+  # Phase 7 — incident-engine (Go: OPA policies + per-vehicle circuit breaker)
   # ---------------------------------------------------------------------------
-  # incident-engine:
-  #   build: ./incident-engine
+  incident-engine:
+    build:
+      context: ./incident-engine
+      dockerfile: Dockerfile
+    container_name: argus-incident-engine
+    environment:
+      INCIDENT_ENGINE_ADDR: ":8098"
+      KAFKA_BROKERS: redpanda:9092
+      INCIDENT_ENGINE_KAFKA_GROUP_ID: ${INCIDENT_ENGINE_KAFKA_GROUP_ID:-argus-incident-engine}
+      QA_METRICS_TOPIC: ${QA_METRICS_TOPIC:-telemetry.qa_metrics}
+      INCIDENTS_RAW_TOPIC: ${INCIDENTS_RAW_TOPIC:-incidents.raw}
+      INCIDENTS_ESCALATED_TOPIC: ${INCIDENTS_ESCALATED_TOPIC:-incidents.escalated}
+      INCIDENT_POLICY_DIR: /etc/argus/policies
+      INCIDENT_QA_WINDOW_BATCHES: ${INCIDENT_QA_WINDOW_BATCHES:-5}
+      INCIDENT_QA_RATE_THRESHOLD: ${INCIDENT_QA_RATE_THRESHOLD:-0.15}
+      INCIDENT_DRIFT_MIN_FEATURES: ${INCIDENT_DRIFT_MIN_FEATURES:-2}
+      INCIDENT_CONSECUTIVE_FAILURES: ${INCIDENT_CONSECUTIVE_FAILURES:-3}
+      INCIDENT_OPEN_COOLDOWN_SEC: ${INCIDENT_OPEN_COOLDOWN_SEC:-60}
+      INCIDENT_SLACK_WEBHOOK_URL: ${INCIDENT_SLACK_WEBHOOK_URL:-}
+      INCIDENT_PAGERDUTY_WEBHOOK_URL: ${INCIDENT_PAGERDUTY_WEBHOOK_URL:-}
+      INCIDENT_ENABLE_MOCK_WEBHOOK: ${INCIDENT_ENABLE_MOCK_WEBHOOK:-true}
+      INCIDENT_SLACK_CHANNEL: ${INCIDENT_SLACK_CHANNEL:-#argus-alerts}
+      INCIDENT_PAGERDUTY_ROUTING_KEY: ${INCIDENT_PAGERDUTY_ROUTING_KEY:-argus-production}
+    ports:
+      - "8098:8098"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      stream-processor:
+        condition: service_healthy
+      drift-monitor:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/incident-engine", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 25s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    restart: unless-stopped
 
   # ---------------------------------------------------------------------------
   # Phase — api-gateway (Go + OPA) (placeholder)

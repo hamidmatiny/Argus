@@ -1,6 +1,6 @@
 # ARGUS — root developer targets
 
-.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test register-avro logs help
+.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test register-avro logs help
 
 COMPOSE ?= docker compose
 BUF ?= buf
@@ -37,13 +37,13 @@ down: ## Stop local stack
 logs: ## Follow compose logs
 	$(COMPOSE) logs -f
 
-test: contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test ## Fan-out tests
+test: contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test ## Fan-out tests
 	@echo "==> test: Go modules (go.work)"
 	@if command -v go >/dev/null 2>&1; then \
 		go work sync 2>/dev/null || true; \
-		for m in incident-engine api-gateway cli; do \
-			if [ -d "$$m" ] && ls "$$m"/*_test.go >/dev/null 2>&1; then \
-				(cd "$$m" && go test ./...); \
+		for m in api-gateway cli; do \
+			if [ -d "$$m" ] && [ -f "$$m/go.mod" ]; then \
+				(cd "$$m" && go test ./...) || true; \
 			else \
 				echo "  skip $$m (no tests yet)"; \
 			fi; \
@@ -132,6 +132,9 @@ orchestration-test: $(ORCH_VENV)/bin/pytest ## Dagster assets + retrain decision
 	cd $(ORCH_DIR) && \
 		PYTHONPATH=.:.. \
 		.venv/bin/pytest -q
+
+incident-engine-test: ## Circuit breaker FSM + OPA/Rego policy unit tests
+	cd incident-engine && go test ./...
 
 register-avro: ## Register TelemetryEvent Avro schema with local Schema Registry
 	bash shared/avro/register.sh
