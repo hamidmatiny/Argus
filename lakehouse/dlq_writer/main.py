@@ -74,6 +74,7 @@ def run() -> int:
         DLQ_HEALTH_PORT,
         stats_provider=lambda: dict(_stats),
         ready_provider=lambda: _ready,
+        writer_name="dlq",
     )
 
     catalog = load_iceberg_catalog()

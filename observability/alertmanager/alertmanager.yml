@@ -1,0 +1,45 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default-log
+  group_by: ["alertname", "service"]
+  group_wait: 15s
+  group_interval: 1m
+  repeat_interval: 2h
+  routes:
+    - match:
+        severity: critical
+        channel: incidents
+      receiver: incident-engine-webhook
+      continue: false
+    - match:
+        severity: warning
+        channel: drift
+      receiver: drift-warnings
+      continue: false
+
+receivers:
+  - name: default-log
+    webhook_configs:
+      - url: http://oncall-reporter:8100/webhook/default
+        send_resolved: true
+
+  # Critical breaker / escalation alerts → Phase 7 mock webhook inbox
+  - name: incident-engine-webhook
+    webhook_configs:
+      - url: http://incident-engine:8098/webhooks/mock
+        send_resolved: true
+
+  # Lower-urgency drift / QA SLO warnings
+  - name: drift-warnings
+    webhook_configs:
+      - url: http://oncall-reporter:8100/webhook/drift
+        send_resolved: true
+
+inhibit_rules:
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ["alertname"]

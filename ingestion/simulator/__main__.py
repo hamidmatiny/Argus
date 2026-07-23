@@ -96,6 +96,7 @@ def run(args: argparse.Namespace) -> int:
         args.health_port,
         stats_provider=lambda: dict(simulator.stats),
         ready_provider=lambda: True,
+        service_name="simulator",
     )
     logger.info(
         "simulator_started",

@@ -1,0 +1,86 @@
+groups:
+  - name: argus_recording
+    interval: 15s
+    rules:
+      # Ingestion throughput — stats are absolute gauges; deriv ≈ events/sec
+      - record: argus:ingestion_events_per_second
+        expr: |
+          clamp_min(
+            (
+              sum(deriv(argus_ingestion_stat{stat="published"}[2m]))
+              or sum(deriv(argus_ingestion_stat{stat="emitted"}[2m]))
+              or sum(deriv(argus_ingestion_stat{stat="consumed"}[2m]))
+              or vector(0)
+            ),
+            0
+          )
+
+      # QA pass rate = validated / (validated + quarantined)
+      - record: argus:qa_pass_ratio
+        expr: |
+          sum(rate(argus_qa_records_total{result="validated"}[5m]))
+          /
+          clamp_min(
+            sum(rate(argus_qa_records_total{result="validated"}[5m]))
+            + sum(rate(argus_qa_records_total{result="quarantined"}[5m])),
+            1e-9
+          )
+
+      # Drift score trend (mean across features)
+      - record: argus:drift_score_avg
+        expr: avg(argus_drift_feature_score) or vector(0)
+
+      # Breaker trip rate (escalations / sec)
+      - record: argus:breaker_trip_rate
+        expr: sum(rate(argus_incident_escalations_published_total[5m])) or vector(0)
+
+      # Open breakers
+      - record: argus:breakers_open
+        expr: count(argus_incident_breaker_state == 2) or vector(0)
+
+      # Retraining trigger frequency proxy: MLflow/Dagster not scraped yet —
+      # use incident escalations tagged as a stand-in until orchestration exports.
+      - record: argus:retraining_trigger_rate
+        expr: sum(rate(argus_incident_escalations_published_total[15m])) or vector(0)
+
+  - name: argus_alerts
+    rules:
+      - alert: QAPassRateSLOBreach
+        expr: argus:qa_pass_ratio < 0.99
+        for: 2m
+        labels:
+          severity: warning
+          channel: drift
+        annotations:
+          summary: "QA pass rate below 99% SLO"
+          description: "argus:qa_pass_ratio={{ $value }} over 5m"
+
+      - alert: DriftScoreElevated
+        expr: argus:drift_score_avg > 0.2
+        for: 3m
+        labels:
+          severity: warning
+          channel: drift
+        annotations:
+          summary: "Elevated fleet drift score"
+          description: "avg drift score={{ $value }}"
+
+      - alert: CircuitBreakerOpen
+        expr: argus:breakers_open > 0
+        for: 1m
+        labels:
+          severity: critical
+          channel: incidents
+        annotations:
+          summary: "One or more circuit breakers are open"
+          description: "open breakers={{ $value }}"
+
+      - alert: EscalationStorm
+        expr: argus:breaker_trip_rate > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          channel: incidents
+        annotations:
+          summary: "High circuit-breaker escalation rate"
+          description: "trip rate={{ $value }}/s"

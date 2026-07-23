@@ -1,0 +1,77 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    platform: argus
+    env: local
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: simulator
+    metrics_path: /metrics
+    scrape_interval: 10s
+    static_configs:
+      - targets: ["simulator:8091"]
+        labels: { service: simulator }
+
+  - job_name: ray-consumer
+    metrics_path: /metrics
+    scrape_interval: 10s
+    static_configs:
+      - targets: ["ray-consumer:8092"]
+        labels: { service: ray-consumer }
+
+  - job_name: stream-processor
+    metrics_path: /metrics
+    scrape_interval: 10s
+    static_configs:
+      - targets: ["stream-processor:8093"]
+        labels: { service: stream-processor }
+
+  - job_name: drift-monitor
+    metrics_path: /metrics
+    scrape_interval: 10s
+    static_configs:
+      - targets: ["drift-monitor:8095"]
+        labels: { service: drift-monitor }
+
+  - job_name: lakehouse-writer
+    metrics_path: /metrics
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["lakehouse-writer:8096"]
+        labels: { service: lakehouse-writer }
+
+  - job_name: lakehouse-dlq-writer
+    metrics_path: /metrics
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["lakehouse-dlq-writer:8097"]
+        labels: { service: lakehouse-dlq-writer }
+
+  - job_name: incident-engine
+    metrics_path: /metrics
+    scrape_interval: 10s
+    static_configs:
+      - targets: ["incident-engine:8098"]
+        labels: { service: incident-engine }
+
+  - job_name: api-gateway
+    metrics_path: /metrics
+    scrape_interval: 10s
+    static_configs:
+      - targets: ["api-gateway:8099"]
+        labels: { service: api-gateway }
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels: { service: prometheus }

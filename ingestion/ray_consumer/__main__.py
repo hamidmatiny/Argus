@@ -124,6 +124,7 @@ def run(args: argparse.Namespace) -> int:
         args.health_port,
         stats_provider=lambda: dict(_aggregate_stats),
         ready_provider=lambda: _ready,
+        service_name="ray-consumer",
     )
 
     initialize_ray(

@@ -130,59 +130,85 @@ def run_local(
                 for message in messages:
                     last_msg_at = time.monotonic()
                     stats["consumed"] += 1
-                    record, codec = decode_value(message.value)
-                    if record is None:
-                        stats["decode_failures"] += 1
-                        stats["quarantined"] += 1
-                        q = build_quarantine_record(
-                            {"_raw_codec": codec},
-                            validate_telemetry_event(None),
-                            source_topic=source_topic,
-                        )
-                        q["reason"] = f"decode_failed:{codec}"
-                        q["field"] = "_payload"
-                        q["rule"] = "decode"
-                        producer.send(
-                            quarantine_topic,
-                            key=b"unknown",
-                            value=encode_json(q),
-                        )
-                        continue
+                    try:
+                        from metrics_prom import RECORDS, WINDOWS
+                        from otel_setup import start_span
+                    except ImportError:  # pragma: no cover
+                        RECORDS = WINDOWS = None  # type: ignore[assignment]
+                        start_span = None  # type: ignore[assignment]
 
-                    result = validate_telemetry_event(record)
-                    vehicle_id = str(record.get("vehicle_id") or "unknown")
-                    if result.ok:
-                        stats["validated"] += 1
-                        producer.send(
-                            validated_topic,
-                            key=vehicle_id.encode("utf-8"),
-                            value=encode_telemetry(record, schema_id=schema_id),
-                        )
-                        metric = windows.observe(vehicle_id, quarantined=False)
-                    else:
-                        stats["quarantined"] += 1
-                        qrec = build_quarantine_record(
-                            record, result, source_topic=source_topic
-                        )
-                        producer.send(
-                            quarantine_topic,
-                            key=vehicle_id.encode("utf-8"),
-                            value=encode_json(qrec),
-                        )
-                        metric = windows.observe(vehicle_id, quarantined=True)
+                    span_cm = (
+                        start_span("qa.validate_record", messaging_system="kafka")
+                        if start_span
+                        else None
+                    )
+                    if span_cm is None:
+                        from contextlib import nullcontext
 
-                    if metric is not None:
-                        stats["metrics_emitted"] += 1
-                        producer.send(
-                            metrics_topic,
-                            key=vehicle_id.encode("utf-8"),
-                            value=encode_json(metric.to_dict()),
-                        )
-                        if metric.exceeded:
-                            logger.warning(
-                                "qa_quarantine_rate_exceeded",
-                                extra=metric.to_dict(),
+                        span_cm = nullcontext()
+
+                    with span_cm:
+                        record, codec = decode_value(message.value)
+                        if record is None:
+                            stats["decode_failures"] += 1
+                            stats["quarantined"] += 1
+                            if RECORDS is not None:
+                                RECORDS.labels(result="quarantined").inc()
+                            q = build_quarantine_record(
+                                {"_raw_codec": codec},
+                                validate_telemetry_event(None),
+                                source_topic=source_topic,
                             )
+                            q["reason"] = f"decode_failed:{codec}"
+                            q["field"] = "_payload"
+                            q["rule"] = "decode"
+                            producer.send(
+                                quarantine_topic,
+                                key=b"unknown",
+                                value=encode_json(q),
+                            )
+                            continue
+
+                        result = validate_telemetry_event(record)
+                        vehicle_id = str(record.get("vehicle_id") or "unknown")
+                        if result.ok:
+                            stats["validated"] += 1
+                            if RECORDS is not None:
+                                RECORDS.labels(result="validated").inc()
+                            producer.send(
+                                validated_topic,
+                                key=vehicle_id.encode("utf-8"),
+                                value=encode_telemetry(record, schema_id=schema_id),
+                            )
+                            metric = windows.observe(vehicle_id, quarantined=False)
+                        else:
+                            stats["quarantined"] += 1
+                            if RECORDS is not None:
+                                RECORDS.labels(result="quarantined").inc()
+                            qrec = build_quarantine_record(
+                                record, result, source_topic=source_topic
+                            )
+                            producer.send(
+                                quarantine_topic,
+                                key=vehicle_id.encode("utf-8"),
+                                value=encode_json(qrec),
+                            )
+                            metric = windows.observe(vehicle_id, quarantined=True)
+
+                        if metric is not None:
+                            stats["metrics_emitted"] += 1
+                            if WINDOWS is not None:
+                                WINDOWS.inc()
+                            producer.send(
+                                metrics_topic,
+                                key=vehicle_id.encode("utf-8"),
+                                value=encode_json(metric.to_dict()),
+                            )
+                            if metric.exceeded:
+                                logger.warning(
+                                    "qa_quarantine_rate_exceeded",
+                                    extra=metric.to_dict(),
+                                )
 
                     if max_messages is not None and stats["consumed"] >= max_messages:
                         _shutdown.set()

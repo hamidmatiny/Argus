@@ -87,6 +87,7 @@ def run() -> int:
         WRITER_HEALTH_PORT,
         stats_provider=lambda: dict(_stats),
         ready_provider=lambda: _ready,
+        writer_name="telemetry",
     )
 
     catalog = load_iceberg_catalog()

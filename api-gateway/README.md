@@ -1,12 +1,13 @@
 # api-gateway
 
-North-south **API gateway** for ARGUS: authn/authz (OPA), rate limiting, routing to internal services, and public/OpenAPI surfaces for dashboard, SDK, and CLI.
+North-south API edge for ARGUS. **Phase 8 stub**: `/health`, Prometheus
+`/metrics`, and OpenTelemetry traces to the platform collector. OPA authz and
+full routing land in a later phase.
 
-**Status:** Scaffold only — implemented in a later phase.
+| Path | Purpose |
+|------|---------|
+| `GET /health` | Liveness |
+| `GET /metrics` | Prometheus (`argus_gateway_*`) |
+| `GET /v1/ping` | Traced ping for demo spans |
 
-**Language:** Go
-
-**Responsibilities (planned):**
-- JWT / mTLS ingress and OPA policy enforcement
-- Route aggregation for incidents, telemetry query, and copilot
-- Structured JSON logging and `/healthz` / `/readyz`
+Default listen: `:8099`. Set `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318`.

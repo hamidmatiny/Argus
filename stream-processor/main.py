@@ -76,6 +76,17 @@ def setup_logging(level: str = "INFO") -> None:
 def start_health(port: int) -> None:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
+            if self.path == "/metrics":
+                from metrics_prom import observe_stats, render
+
+                observe_stats(_stats, ready=_ready)
+                body, ctype = render()
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if self.path not in ("/health", "/healthz", "/"):
                 self.send_response(404)
                 self.end_headers()
@@ -156,6 +167,14 @@ def main(argv: list[str] | None = None) -> int:
     global _ready, _stats
     args = build_parser().parse_args(argv)
     setup_logging(os.getenv("LOG_LEVEL", "INFO"))
+    try:
+        from otel_setup import init_tracer
+
+        init_tracer("stream-processor")
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger("argus.stream_processor").warning(
+            "otel_init_failed", extra={"error": str(exc)}
+        )
     start_health(args.health_port)
     _ready = True
     logging.getLogger("argus.stream_processor").info(
