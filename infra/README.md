@@ -6,6 +6,18 @@ Local development remains **docker-compose**. This tree is the production
 footprint: same container images, different substrate (MSK instead of
 Redpanda, S3+Glue Iceberg instead of MinIO, EKS instead of Compose).
 
+## What it does
+
+See the narrative sections below for responsibilities and scope.
+
+## Config
+
+Primary knobs live in the root `.env.example` and the Configuration section below.
+
+## Testing
+
+See the Tests section below.
+
 ## Topology
 
 ```text

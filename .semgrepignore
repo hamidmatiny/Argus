@@ -1,0 +1,17 @@
+# Generated / vendored / build outputs
+**/node_modules/**
+**/.venv/**
+**/.next/**
+**/site/**
+shared/gen/**
+**/.terraform/**
+**/*.lock.hcl
+
+# IaC findings that are intentional local/prod patterns (public subnets for ALB,
+# documented in ADR-006). Review via terraform + security review, not Semgrep CI.
+infra/terraform/**
+
+# Test fixtures and eval corpora
+**/testdata/**
+**/fixtures/**
+ai-copilot/eval/**

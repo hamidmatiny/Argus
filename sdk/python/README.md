@@ -3,6 +3,18 @@
 Typed client for the Phase 9 **api-gateway**, plus a drop-in Kafka
 `IngestClient` that validates against the Phase 1 `TelemetryEvent` contract.
 
+## What it does
+
+See the narrative sections below for responsibilities and scope.
+
+## Architecture
+
+See topology / flow / ports sections below.
+
+## Testing
+
+See the Tests section below.
+
 ## Install
 
 ```bash

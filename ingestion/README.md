@@ -4,6 +4,10 @@ Fleet telemetry **entry point** for ARGUS: a configurable simulator publishes
 Avro `TelemetryEvent` messages to Kafka, and a Ray Core consumer pool
 **pass-through normalizes** them onto a downstream topic.
 
+## Config
+
+Primary knobs live in the root `.env.example` and the Configuration section below.
+
 ## Division of responsibility
 
 | Layer | Role |

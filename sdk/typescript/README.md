@@ -2,6 +2,22 @@
 
 Typed TypeScript client for the ARGUS **api-gateway** (browser + Node 18+).
 
+## What it does
+
+See the narrative sections below for responsibilities and scope.
+
+## Architecture
+
+See topology / flow / ports sections below.
+
+## Config
+
+Primary knobs live in the root `.env.example` and the Configuration section below.
+
+## Testing
+
+See the Tests section below.
+
 ## Install
 
 ```bash

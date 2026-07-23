@@ -87,14 +87,27 @@ def start_health(port: int) -> None:
                 self.end_headers()
                 self.wfile.write(body)
                 return
+            if self.path == "/readyz":
+                body = json.dumps({"ready": _ready, "stats": _stats}).encode()
+                self.send_response(200 if _ready else 503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if self.path not in ("/health", "/healthz", "/"):
                 self.send_response(404)
                 self.end_headers()
                 return
+            # Liveness: always 200 once the HTTP server is up.
             body = json.dumps(
-                {"status": "ok" if _ready else "starting", "ready": _ready, "stats": _stats}
+                {
+                    "status": "ok" if _ready else "starting",
+                    "ready": _ready,
+                    "stats": _stats,
+                }
             ).encode()
-            self.send_response(200 if _ready else 503)
+            self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()

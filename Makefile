@@ -1,6 +1,6 @@
 # ARGUS — root developer targets
 
-.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test cli-test sdk-python-test sdk-typescript-test copilot-test terraform-validate helm-lint register-avro logs help
+.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test cli-test sdk-python-test sdk-typescript-test copilot-test terraform-validate helm-lint register-avro logs docs docs-build help
 
 COMPOSE ?= docker compose
 BUF ?= buf
@@ -24,6 +24,14 @@ LAKE_PIP := $(LAKE_VENV)/bin/pip
 ORCH_DIR := orchestration
 ORCH_VENV := $(ORCH_DIR)/.venv
 ORCH_PIP := $(ORCH_VENV)/bin/pip
+
+docs: ## Serve MkDocs Material docs locally
+	$(PYTHON) -m pip install -q -r docs/requirements.txt
+	mkdocs serve
+
+docs-build: ## Build docs site (strict)
+	$(PYTHON) -m pip install -q -r docs/requirements.txt
+	mkdocs build --strict
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?##"}; {printf "  %-22s %s\n", $$1, $$2}'

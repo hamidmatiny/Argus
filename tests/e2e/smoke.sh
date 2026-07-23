@@ -5,7 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-argus-e2e}"
+# Note: docker-compose.yml uses fixed container_name: argus-* so only one
+# stack can run at a time (COMPOSE_PROJECT_NAME alone does not isolate).
 export AUTH_DEMO_OFFLINE="${AUTH_DEMO_OFFLINE:-true}"
 export LLM_PROVIDER="${LLM_PROVIDER:-mock}"
 export EMBEDDING_PROVIDER="${EMBEDDING_PROVIDER:-hash}"
@@ -22,6 +23,9 @@ cleanup() {
   docker compose down -v --remove-orphans || true
 }
 trap cleanup EXIT
+
+echo "==> preflight: stop any existing ARGUS compose stack"
+docker compose down --remove-orphans || true
 
 echo "==> ensure .env"
 if [[ ! -f .env ]]; then

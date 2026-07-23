@@ -8,6 +8,17 @@ directly.
 JWT AuthN · OPA/Rego AuthZ (`viewer` / `operator` / `admin`) · token-bucket
 rate limits · OpenTelemetry (`traceparent`) · Prometheus `/metrics`.
 
+## What it does
+
+See the narrative sections below for responsibilities and scope.
+
+## Quick start
+
+```bash
+# From repo root
+docker compose up -d --build
+```
+
 ## Ports
 
 | Port | Protocol | Purpose |

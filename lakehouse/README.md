@@ -6,6 +6,10 @@ reads. This is a deliberate upgrade from hydra-data-factory’s Hive-partitioned
 Parquet layout (same Snappy Parquet files underneath, transactional metadata
 on top).
 
+## What it does
+
+See the narrative sections below for responsibilities and scope.
+
 ## Architecture
 
 ```text

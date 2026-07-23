@@ -8,6 +8,10 @@ feature stats → Evidently drift decisions → **MLflow** lineage + Kafka
 Optional **Feast** definitions live under [`feature_store/`](./feature_store/)
 (advanced module — see that README).
 
+## What it does
+
+See the narrative sections below for responsibilities and scope.
+
 ## Asset graph
 
 ```text

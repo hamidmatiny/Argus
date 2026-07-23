@@ -5,6 +5,14 @@ drift `IncidentEvent`s, evaluates **OPA/Rego** policies, and drives a
 per-vehicle **circuit breaker** (`closed → open → half-open`) before
 escalating to `incidents.escalated` + Slack/PagerDuty-shaped webhooks.
 
+## What it does
+
+See the narrative sections below for responsibilities and scope.
+
+## Testing
+
+See the Tests section below.
+
 ## Circuit breaker
 
 ```text

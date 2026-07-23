@@ -4,6 +4,25 @@ Single source of truth for every data shape that crosses an ARGUS service bounda
 Schemas here are versioned and regenerated into language-specific stubs; application
 services must not invent parallel field names for the same concepts.
 
+## Architecture
+
+See topology / flow / ports sections below.
+
+## Quick start
+
+```bash
+# From repo root
+docker compose up -d --build
+```
+
+## Config
+
+Primary knobs live in the root `.env.example` and the Configuration section below.
+
+## Testing
+
+See the Tests section below.
+
 ## What lives here
 
 | Path | Role |

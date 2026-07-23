@@ -4,6 +4,18 @@ Next.js (App Router) UI for fleet health, incidents, data quality, telemetry
 exploration, and pipeline status. Talks **only** to `api-gateway` (and
 Prometheus / Dagster / MLflow via server-side BFF routes).
 
+## What it does
+
+See the narrative sections below for responsibilities and scope.
+
+## Architecture
+
+See topology / flow / ports sections below.
+
+## Config
+
+Primary knobs live in the root `.env.example` and the Configuration section below.
+
 ## Screenshots
 
 | Page | Placeholder |

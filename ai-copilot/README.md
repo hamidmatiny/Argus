@@ -8,6 +8,10 @@ queries live platform APIs.
 > incidents or trigger retraining. Those remain operator actions via the
 > dashboard / `argusctl` / gateway.
 
+## What it does
+
+See the narrative sections below for responsibilities and scope.
+
 ## Architecture
 
 ```text

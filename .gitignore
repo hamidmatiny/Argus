@@ -74,3 +74,4 @@ orchestration/.venv/
 orchestration/artifacts/
 orchestration/feature_store/data/*.parquet
 orchestration/feature_store/data/*.db
+site/

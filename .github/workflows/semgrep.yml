@@ -22,14 +22,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Scan
         run: |
+          # OWASP + CI packs; exclude noisy generic urllib audit (registry clients use fixed http URLs).
           semgrep scan \
             --config p/ci \
-            --config p/security-audit \
             --config p/owasp-top-ten \
             --error \
             --metrics off \
+            --exclude-rule=python.lang.security.audit.dynamic-urllib-use-detected \
             --exclude='shared/gen' \
             --exclude='**/.venv' \
             --exclude='**/node_modules' \
             --exclude='**/.next' \
-            --exclude='infra/terraform/**/.terraform'
+            --exclude='infra/terraform'

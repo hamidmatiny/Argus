@@ -61,23 +61,41 @@ def run_local(
     _shutdown.clear()
 
     schema = load_avro_schema()
-    schema_id = ensure_schema_registered(
-        schema_registry_url,
-        "argus.telemetry.TelemetryEvent-value",
-        schema,
-    )
+    schema_id = 0
+    try:
+        schema_id = ensure_schema_registered(
+            schema_registry_url,
+            "argus.telemetry.TelemetryEvent-value",
+            schema,
+        )
+    except Exception as exc:  # noqa: BLE001 — registry optional at boot; JSON path still works
+        logger.warning(
+            "schema_registry_unavailable",
+            extra={"error": str(exc), "url": schema_registry_url},
+        )
     bootstrap = [b.strip() for b in brokers.split(",") if b.strip()]
-    consumer = KafkaConsumer(
-        source_topic,
-        bootstrap_servers=bootstrap,
-        group_id=group_id,
-        client_id="argus-stream-processor-local",
-        enable_auto_commit=True,
-        auto_offset_reset="earliest",
-        max_partition_fetch_bytes=2 * 1024 * 1024,
-        fetch_max_bytes=10 * 1024 * 1024,
-        consumer_timeout_ms=500,
-    )
+    consumer = None
+    while consumer is None and not _shutdown.is_set():
+        try:
+            consumer = KafkaConsumer(
+                source_topic,
+                bootstrap_servers=bootstrap,
+                group_id=group_id,
+                client_id="argus-stream-processor-local",
+                enable_auto_commit=True,
+                auto_offset_reset="earliest",
+                max_partition_fetch_bytes=2 * 1024 * 1024,
+                fetch_max_bytes=10 * 1024 * 1024,
+                consumer_timeout_ms=500,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "kafka_connect_retry",
+                extra={"error": str(exc), "brokers": brokers},
+            )
+            time.sleep(2)
+    if consumer is None:
+        return stats if stats is not None else {}
     producer = KafkaProducer(
         bootstrap_servers=bootstrap,
         client_id="argus-stream-processor-producer",

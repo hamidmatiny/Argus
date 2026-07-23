@@ -118,5 +118,8 @@ Exact IDL files are intentionally deferred to Phase 1 (`make proto` will generat
 ## Related docs
 
 - [README.md](./README.md) — pitch and layout table
+- [docs/](./docs/) — MkDocs site (Getting Started, ADRs, demo script, case study)
+- [docs/DEMO_SCRIPT.md](./docs/DEMO_SCRIPT.md) — 5-minute live demo
+- [CHANGELOG.md](./CHANGELOG.md) — v1.0.0 release notes
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — phase-based contribution model
 - `docs/` — ADRs and runbooks (as they land)

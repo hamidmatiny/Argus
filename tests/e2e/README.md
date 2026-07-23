@@ -3,6 +3,29 @@
 These suites are **not** run on every PR (too slow). They run on a schedule
 and via `workflow_dispatch`.
 
+## What it does
+
+See the narrative sections below for responsibilities and scope.
+
+## Architecture
+
+See topology / flow / ports sections below.
+
+## Quick start
+
+```bash
+# From repo root
+docker compose up -d --build
+```
+
+## Config
+
+Primary knobs live in the root `.env.example` and the Configuration section below.
+
+## Testing
+
+See the Tests section below.
+
 ## Full-stack smoke (`smoke.sh`)
 
 Boots docker compose, waits for health endpoints, lets the simulator run

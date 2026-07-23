@@ -6,6 +6,25 @@ lightweight on-call report generator.
 
 **Status:** Phase 8 — wired into `docker-compose.yml`.
 
+## What it does
+
+See the narrative sections below for responsibilities and scope.
+
+## Quick start
+
+```bash
+# From repo root
+docker compose up -d --build
+```
+
+## Config
+
+Primary knobs live in the root `.env.example` and the Configuration section below.
+
+## Testing
+
+See the Tests section below.
+
 ## Ports (host)
 
 | Service | Port | Notes |

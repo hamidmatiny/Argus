@@ -75,7 +75,7 @@ jobs:
             tag: argus-stream-processor:ci
             port: "8093"
             health: /health
-            env: "-e KAFKA_BROKERS=127.0.0.1:9092"
+            env: "-e KAFKA_BROKERS=127.0.0.1:9092 -e SCHEMA_REGISTRY_URL=http://127.0.0.1:18081"
           - name: drift-monitor
             context: .
             file: drift-monitor/Dockerfile
@@ -99,7 +99,7 @@ jobs:
             env: ""
           - name: incident-engine
             context: ./incident-engine
-            file: Dockerfile
+            file: incident-engine/Dockerfile
             tag: argus-incident-engine:ci
             port: "8098"
             health: /health
@@ -113,7 +113,7 @@ jobs:
             env: "-e API_GATEWAY_AUTH_DISABLED=true"
           - name: oncall-reporter
             context: ./observability/oncall
-            file: Dockerfile
+            file: observability/oncall/Dockerfile
             tag: argus-oncall:ci
             port: "8100"
             health: /health
@@ -127,11 +127,11 @@ jobs:
             env: "-e NEXTAUTH_SECRET=ci-build-secret -e NEXTAUTH_URL=http://localhost:3000 -e AUTH_DEMO_OFFLINE=true -e ARGUS_GATEWAY_URL=http://127.0.0.1:8099"
           - name: ai-copilot
             context: ./ai-copilot
-            file: Dockerfile
+            file: ai-copilot/Dockerfile
             tag: argus-ai-copilot:ci
             port: "8090"
             health: /health
-            env: "-e LLM_PROVIDER=mock -e EMBEDDING_PROVIDER=hash -e QDRANT_URL=http://127.0.0.1:6333"
+            env: "-e LLM_PROVIDER=mock -e EMBEDDING_PROVIDER=hash -e QDRANT_URL=http://127.0.0.1:6333 -e SCHEMA_REGISTRY_URL="
 
     steps:
       - uses: actions/checkout@v4
