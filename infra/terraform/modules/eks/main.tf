@@ -50,6 +50,16 @@ variable "node_max" {
   default = 6
 }
 
+variable "public_access_cidrs" {
+  type        = list(string)
+  description = <<-EOT
+    CIDRs allowed to reach the EKS public API endpoint. Empty list disables
+    public access entirely (private endpoint only — use VPN/bastion/SSM).
+    Never leave this unset with public access on: AWS would default to 0.0.0.0/0.
+  EOT
+  default = []
+}
+
 variable "tags" {
   type    = map(string)
   default = {}
@@ -97,7 +107,9 @@ resource "aws_eks_cluster" "this" {
   vpc_config {
     subnet_ids              = var.private_subnet_ids
     endpoint_private_access = true
-    endpoint_public_access  = true
+    # Empty public_access_cidrs → public endpoint off (no 0.0.0.0/0 default).
+    endpoint_public_access  = length(var.public_access_cidrs) > 0
+    public_access_cidrs     = length(var.public_access_cidrs) > 0 ? var.public_access_cidrs : null
     security_group_ids      = [aws_security_group.cluster.id]
   }
 

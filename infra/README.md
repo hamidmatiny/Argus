@@ -140,13 +140,34 @@ Adjust `backend "s3"` bucket/region in each `environments/*/main.tf` if needed.
 
 ### 2. Terraform apply (dev first)
 
+**EKS API access:** the cluster public endpoint is **off** unless you pass
+CIDRs. Empty `eks_public_access_cidrs` ⇒ private-only (no `0.0.0.0/0` default).
+
 ```bash
+# Recommended: your current public IP as a /32 (or office/VPN egress CIDR)
+MY_IP="$(curl -4 -s https://checkip.amazonaws.com)/32"
+# example: 203.0.113.10/32
+
 cd infra/terraform/environments/dev
 terraform init
-terraform plan -out=tfplan
+terraform plan \
+  -var="eks_public_access_cidrs=[\"$${MY_IP}\"]" \
+  -out=tfplan
 # Review carefully, then ONLY if intentional:
 # terraform apply tfplan
 ```
+
+Or a `dev.tfvars`:
+
+```hcl
+eks_public_access_cidrs = ["203.0.113.10/32"]  # home/office/VPN — not 0.0.0.0/0
+```
+
+| Env | Recommended `eks_public_access_cidrs` |
+|-----|----------------------------------------|
+| **dev** | Your laptop `/32` or home ISP CIDR while bootstrapping kubectl |
+| **staging** | Office or VPN egress CIDR |
+| **prod** | **`[]` (default)** — private endpoint only; reach the API via VPN/bastion/SSM. Validation rejects `0.0.0.0/0`. |
 
 Capture outputs:
 

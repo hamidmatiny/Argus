@@ -44,6 +44,13 @@ variable "environment" {
   default = "dev"
 }
 
+variable "eks_public_access_cidrs" {
+  type        = list(string)
+  description = "CIDRs for EKS public API (e.g. [\"203.0.113.10/32\"]). Empty = private-only."
+  # Dev: set via -var / tfvars to your home/office IP when you need kubectl from the internet.
+  default = []
+}
+
 locals {
   name = "${var.project}-${var.environment}"
   tags = {
@@ -79,6 +86,7 @@ module "eks" {
   node_desired        = 2
   node_min            = 1
   node_max            = 4
+  public_access_cidrs = var.eks_public_access_cidrs
   tags                = local.tags
 }
 

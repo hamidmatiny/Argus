@@ -44,6 +44,21 @@ variable "environment" {
   default = "prod"
 }
 
+variable "eks_public_access_cidrs" {
+  type        = list(string)
+  description = <<-EOT
+    CIDRs allowed to hit the EKS public API. Prod default is [] (public endpoint
+    disabled). Prefer VPN/bastion. If you must expose the API, pass only your
+    corporate VPN egress CIDR — never 0.0.0.0/0.
+  EOT
+  default     = []
+
+  validation {
+    condition     = !contains(var.eks_public_access_cidrs, "0.0.0.0/0")
+    error_message = "prod eks_public_access_cidrs must not include 0.0.0.0/0; use a VPN/office CIDR or leave empty for private-only."
+  }
+}
+
 locals {
   name = "${var.project}-${var.environment}"
   tags = {
@@ -79,6 +94,7 @@ module "eks" {
   node_desired        = 3
   node_min            = 3
   node_max            = 12
+  public_access_cidrs = var.eks_public_access_cidrs
   tags                = local.tags
 }
 

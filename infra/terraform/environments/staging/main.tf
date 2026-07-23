@@ -44,6 +44,12 @@ variable "environment" {
   default = "staging"
 }
 
+variable "eks_public_access_cidrs" {
+  type        = list(string)
+  description = "CIDRs for EKS public API (e.g. office/VPN). Empty = private-only."
+  default     = []
+}
+
 locals {
   name = "${var.project}-${var.environment}"
   tags = {
@@ -79,6 +85,7 @@ module "eks" {
   node_desired        = 2
   node_min            = 1
   node_max            = 4
+  public_access_cidrs = var.eks_public_access_cidrs
   tags                = local.tags
 }
 
