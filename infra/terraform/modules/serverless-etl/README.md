@@ -39,3 +39,9 @@ Then start an execution manually, or set `enable_eventbridge_schedule = true` wh
 ## IAM
 
 Separate roles for Lambda (S3 `serverless/*` only + Glue table-scoped + SQS send + logs), Step Functions (invoke the four functions + logging), and EventBridge (start execution, only when the schedule is enabled).
+
+## Tests
+
+```bash
+make serverless-etl-test   # moto-backed pytest for the four handlers
+```
