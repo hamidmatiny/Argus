@@ -574,8 +574,20 @@ services:
         condition: service_healthy
       mlflow:
         condition: service_healthy
+    # Override image HEALTHCHECK (expects Dagster webserver :3000). Daemon has
+    # no HTTP port — process probe so `docker compose up --wait` can succeed.
     healthcheck:
-      disable: true
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import pathlib,sys; sys.exit(0 if any(b'dagster-daemon' in pathlib.Path('/proc',p,'cmdline').read_bytes() for p in pathlib.Path('/proc').iterdir() if p.name.isdigit()) else 1)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
