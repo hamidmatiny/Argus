@@ -26,6 +26,13 @@ type Breaker struct {
 	LastReasons     []string  `json:"last_reasons,omitempty"`
 }
 
+// Outcome describes the result of one Evaluate call.
+type Outcome struct {
+	Breaker   Breaker
+	Tripped   bool // Closed→Open or HalfOpen→Open
+	Recovered bool // HalfOpen→Closed
+}
+
 // Config tunes recovery behavior.
 type Config struct {
 	OpenCooldown        time.Duration
@@ -55,6 +62,17 @@ func NewStore(cfg Config) *Store {
 	}
 }
 
+// SetNow overrides the clock (tests).
+func (s *Store) SetNow(now func() time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if now == nil {
+		s.now = time.Now
+		return
+	}
+	s.now = now
+}
+
 // Get returns a copy of the breaker for vehicleID (creating closed if missing).
 func (s *Store) Get(vehicleID string) Breaker {
 	s.mu.Lock()
@@ -77,22 +95,21 @@ func (s *Store) Snapshot() []Breaker {
 	return out
 }
 
-// Evaluate applies a policy trip/success signal and returns the new state plus
-// whether this call caused a fresh Closed→Open (or HalfOpen→Open) trip.
-func (s *Store) Evaluate(vehicleID string, shouldTrip bool, reasons []string) (Breaker, bool) {
+// Evaluate applies a policy trip/success signal.
+func (s *Store) Evaluate(vehicleID string, shouldTrip bool, reasons []string) Outcome {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	b := s.getOrCreate(vehicleID)
 	prev := b.State
 	s.maybeAdvanceLocked(b)
-	trippedNow := false
 	now := s.now()
 
 	// Cooldown only opens the probe window — do not count this call as success.
 	if prev == StateOpen && b.State == StateHalfOpen {
-		return *b, false
+		return Outcome{Breaker: *b}
 	}
 
+	out := Outcome{}
 	switch b.State {
 	case StateClosed:
 		if shouldTrip {
@@ -102,7 +119,7 @@ func (s *Store) Evaluate(vehicleID string, shouldTrip bool, reasons []string) (B
 			b.TripCount++
 			b.LastReasons = append([]string(nil), reasons...)
 			b.HalfOpenSuccess = 0
-			trippedNow = true
+			out.Tripped = true
 		}
 	case StateOpen:
 		// Suppress duplicate escalations while open; cooldown advances via maybeAdvance.
@@ -114,7 +131,7 @@ func (s *Store) Evaluate(vehicleID string, shouldTrip bool, reasons []string) (B
 			b.TripCount++
 			b.LastReasons = append([]string(nil), reasons...)
 			b.HalfOpenSuccess = 0
-			trippedNow = true
+			out.Tripped = true
 		} else {
 			b.HalfOpenSuccess++
 			if b.HalfOpenSuccess >= s.cfg.HalfOpenSuccessNeed {
@@ -122,10 +139,12 @@ func (s *Store) Evaluate(vehicleID string, shouldTrip bool, reasons []string) (B
 				b.LastTransition = now
 				b.HalfOpenSuccess = 0
 				b.LastReasons = nil
+				out.Recovered = true
 			}
 		}
 	}
-	return *b, trippedNow
+	out.Breaker = *b
+	return out
 }
 
 func (s *Store) getOrCreate(vehicleID string) *Breaker {

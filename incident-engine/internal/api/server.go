@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/argus-platform/argus/incident-engine/internal/engine"
@@ -33,7 +34,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/readyz", s.handleReady)
 	mux.Handle("/metrics", metrics.Handler())
 	mux.HandleFunc("/breakers", s.handleBreakers)
-	mux.HandleFunc("/incidents", s.handleIncidents)
+	mux.HandleFunc("GET /incidents", s.handleIncidents)
+	mux.HandleFunc("POST /incidents/{id}/resolve", s.handleResolveIncident)
 	mux.HandleFunc("/webhooks/mock", s.handleMockWebhook)
 	mux.HandleFunc("/webhooks/mock/inbox", s.handleMockInbox)
 	return mux
@@ -66,6 +68,20 @@ func (s *Server) handleIncidents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"incidents": s.corr.ListIncidents(status),
 	})
+}
+
+func (s *Server) handleResolveIncident(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	rec, err := s.corr.ResolveIncident(id)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"incident": rec})
 }
 
 func (s *Server) handleMockWebhook(w http.ResponseWriter, r *http.Request) {

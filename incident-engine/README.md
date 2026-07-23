@@ -56,9 +56,12 @@ threshold breaches.
 | `GET /readyz` | Readiness |
 | `GET /metrics` | Prometheus (breaker state, incidents processed, policy latency) |
 | `GET /breakers` | All vehicle breaker snapshots |
-| `GET /incidents?status=open` | In-memory escalations (dashboard Phase 10) |
+| `GET /incidents?status=open\|resolved` | In-memory escalations (dashboard Phase 10) |
+| `POST /incidents/{id}/resolve` | Manual operator resolve (idempotent) |
 | `POST /webhooks/mock` | Local mock receiver (used when no real webhook URLs set) |
 | `GET /webhooks/mock/inbox` | Inspect mock deliveries |
+
+Incidents auto-resolve when a vehicle breaker recovers (`half_open` → `closed`).
 
 ## Configuration
 

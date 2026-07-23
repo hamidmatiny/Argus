@@ -63,6 +63,7 @@ type EscalatedIncident struct {
 	Severity              string         `json:"severity"`
 	Status                string         `json:"status"`
 	Timestamp             string         `json:"timestamp"`
+	ResolvedAt            string         `json:"resolved_at,omitempty"`
 	CircuitBreakerTripped bool           `json:"circuit_breaker_tripped"`
 	Summary               string         `json:"summary"`
 	Reasons               []string       `json:"reasons"`
@@ -74,5 +75,6 @@ type EscalatedIncident struct {
 // IncidentRecord is the in-memory store entry for GET /incidents.
 type IncidentRecord struct {
 	EscalatedIncident
-	Open bool `json:"open"`
+	Open          bool   `json:"open"`
+	ResolveReason string `json:"resolve_reason,omitempty"`
 }

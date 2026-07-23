@@ -4,6 +4,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -180,11 +181,18 @@ func (c *Correlator) evaluate(
 	}
 	c.metrics.PolicyEvalSeconds.Observe(latency.Seconds())
 
-	// Healthy signal for half-open recovery: policy does not trip.
-	state, tripped := c.breakers.Evaluate(vehicleID, dec.Trip, dec.Reasons)
-	c.metrics.SetBreaker(vehicleID, string(state.State))
+	out := c.breakers.Evaluate(vehicleID, dec.Trip, dec.Reasons)
+	c.metrics.SetBreaker(vehicleID, string(out.Breaker.State))
 
-	if !tripped {
+	if out.Recovered {
+		n := c.resolveVehicleOpenIncidents(vehicleID, "breaker_recovered")
+		slog.Info("circuit_breaker_recovered",
+			"vehicle_id", vehicleID,
+			"resolved_incidents", n,
+		)
+	}
+
+	if !out.Tripped {
 		return nil
 	}
 
@@ -235,6 +243,51 @@ func (c *Correlator) evaluate(
 	return nil
 }
 
+// resolveVehicleOpenIncidents marks all open incidents for vehicleID resolved.
+func (c *Correlator) resolveVehicleOpenIncidents(vehicleID, reason string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	n := 0
+	for i := range c.incidents {
+		inc := &c.incidents[i]
+		if inc.VehicleID != vehicleID || !inc.Open {
+			continue
+		}
+		inc.Open = false
+		inc.Status = "resolved"
+		inc.ResolvedAt = now
+		inc.ResolveReason = reason
+		n++
+	}
+	return n
+}
+
+// ResolveIncident manually resolves an incident by ID. Idempotent when already resolved.
+func (c *Correlator) ResolveIncident(id string) (models.IncidentRecord, error) {
+	if id == "" {
+		return models.IncidentRecord{}, fmt.Errorf("incident id required")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i := range c.incidents {
+		inc := &c.incidents[i]
+		if inc.IncidentID != id {
+			continue
+		}
+		if !inc.Open && inc.Status == "resolved" {
+			return *inc, nil
+		}
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		inc.Open = false
+		inc.Status = "resolved"
+		inc.ResolvedAt = now
+		inc.ResolveReason = "manual"
+		return *inc, nil
+	}
+	return models.IncidentRecord{}, fmt.Errorf("incident %q not found", id)
+}
+
 // ListBreakers returns breaker snapshots.
 func (c *Correlator) ListBreakers() []circuitbreaker.Breaker {
 	return c.breakers.Snapshot()
@@ -248,7 +301,11 @@ func (c *Correlator) ListIncidents(status string) []models.IncidentRecord {
 	for _, inc := range c.incidents {
 		switch status {
 		case "open":
-			if inc.Open || inc.Status == "open" {
+			if inc.Open && inc.Status == "open" {
+				out = append(out, inc)
+			}
+		case "resolved":
+			if !inc.Open || inc.Status == "resolved" {
 				out = append(out, inc)
 			}
 		case "":
