@@ -1,0 +1,11 @@
+project: argus
+registry: data/registry.db
+provider: local
+entity_key_serialization_version: 2
+
+offline_store:
+  type: file
+
+online_store:
+  type: sqlite
+  path: data/online_store.db

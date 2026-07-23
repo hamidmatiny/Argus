@@ -427,10 +427,152 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Phase — orchestration (Dagster) (placeholder)
+  # Phase 6 — orchestration (Dagster + MLflow + Postgres)
   # ---------------------------------------------------------------------------
-  # orchestration:
-  #   build: ./orchestration
+  postgres-mlops:
+    image: postgres:16-alpine
+    container_name: argus-postgres-mlops
+    environment:
+      POSTGRES_USER: ${POSTGRES_MLOPS_USER:-argus}
+      POSTGRES_PASSWORD: ${POSTGRES_MLOPS_PASSWORD:-argus}
+      POSTGRES_DB: ${POSTGRES_MLOPS_DB:-mlops}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-mlops-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U argus -d mlops"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: orchestration/Dockerfile
+    container_name: argus-mlflow
+    user: root
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=postgresql://argus:argus@postgres-mlops:5432/mlops
+      - --default-artifact-root=/mlflow/artifacts
+    environment:
+      MLFLOW_TRACKING_URI: http://0.0.0.0:5000
+    ports:
+      # Host 5002 — 5000/5001 often taken on macOS / other local tools.
+      - "5002:5000"
+    volumes:
+      - mlflow-artifacts:/mlflow/artifacts
+    depends_on:
+      postgres-mlops:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:5000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    # Override image HEALTHCHECK (expects Dagster :3000).
+    restart: unless-stopped
+
+  dagster-webserver:
+    build:
+      context: .
+      dockerfile: orchestration/Dockerfile
+    container_name: argus-dagster-webserver
+    command:
+      - dagster-webserver
+      - -h
+      - "0.0.0.0"
+      - -p
+      - "3000"
+      - -w
+      - workspace.yaml
+    environment:
+      DAGSTER_HOME: /opt/dagster/app
+      KAFKA_BROKERS: redpanda:9092
+      ORCH_RETRAINING_TOPIC: orchestration.retraining_triggered
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-argus-retraining}
+      ICEBERG_CATALOG_TYPE: rest
+      ICEBERG_CATALOG_URI: http://iceberg-rest:8181
+      ICEBERG_WAREHOUSE: s3://warehouse/
+      S3_ENDPOINT: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-admin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-password}
+      AWS_REGION: us-east-1
+      DRIFT_REPORTS_DIR: /opt/dagster/app/drift_reports
+      ORCH_ARTIFACTS_DIR: /opt/dagster/app/artifacts
+      FEAST_REPO_PATH: /opt/dagster/app/feature_store
+      ORCH_RETRAIN_MAX_SCORE_THRESHOLD: ${ORCH_RETRAIN_MAX_SCORE_THRESHOLD:-0.5}
+      ORCH_RETRAIN_MIN_DRIFTED_FEATURES: ${ORCH_RETRAIN_MIN_DRIFTED_FEATURES:-2}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./drift-monitor/reports:/opt/dagster/app/drift_reports
+      - dagster-storage:/opt/dagster/storage
+      - orchestration-artifacts:/opt/dagster/app/artifacts
+    depends_on:
+      mlflow:
+        condition: service_healthy
+      iceberg-rest:
+        condition: service_started
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/server_info"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1536M
+    restart: unless-stopped
+
+  dagster-daemon:
+    build:
+      context: .
+      dockerfile: orchestration/Dockerfile
+    container_name: argus-dagster-daemon
+    command: ["dagster-daemon", "run"]
+    environment:
+      DAGSTER_HOME: /opt/dagster/app
+      KAFKA_BROKERS: redpanda:9092
+      ORCH_RETRAINING_TOPIC: orchestration.retraining_triggered
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-argus-retraining}
+      ICEBERG_CATALOG_TYPE: rest
+      ICEBERG_CATALOG_URI: http://iceberg-rest:8181
+      ICEBERG_WAREHOUSE: s3://warehouse/
+      S3_ENDPOINT: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-admin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-password}
+      AWS_REGION: us-east-1
+      DRIFT_REPORTS_DIR: /opt/dagster/app/drift_reports
+      ORCH_ARTIFACTS_DIR: /opt/dagster/app/artifacts
+      FEAST_REPO_PATH: /opt/dagster/app/feature_store
+      ORCH_RETRAIN_MAX_SCORE_THRESHOLD: ${ORCH_RETRAIN_MAX_SCORE_THRESHOLD:-0.5}
+      ORCH_RETRAIN_MIN_DRIFTED_FEATURES: ${ORCH_RETRAIN_MIN_DRIFTED_FEATURES:-2}
+    volumes:
+      - ./drift-monitor/reports:/opt/dagster/app/drift_reports
+      - dagster-storage:/opt/dagster/storage
+      - orchestration-artifacts:/opt/dagster/app/artifacts
+    depends_on:
+      dagster-webserver:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: unless-stopped
 
   # ---------------------------------------------------------------------------
   # Phase 4 — drift-monitor (KS + Evidently → incidents.raw)
@@ -515,3 +657,7 @@ services:
 volumes:
   redpanda-data:
   minio-data:
+  postgres-mlops-data:
+  mlflow-artifacts:
+  dagster-storage:
+  orchestration-artifacts:

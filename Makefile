@@ -1,6 +1,6 @@
 # ARGUS — root developer targets
 
-.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test register-avro logs help
+.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test register-avro logs help
 
 COMPOSE ?= docker compose
 BUF ?= buf
@@ -21,6 +21,9 @@ DRIFT_PIP := $(DRIFT_VENV)/bin/pip
 LAKE_DIR := lakehouse
 LAKE_VENV := $(LAKE_DIR)/.venv
 LAKE_PIP := $(LAKE_VENV)/bin/pip
+ORCH_DIR := orchestration
+ORCH_VENV := $(ORCH_DIR)/.venv
+ORCH_PIP := $(ORCH_VENV)/bin/pip
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?##"}; {printf "  %-22s %s\n", $$1, $$2}'
@@ -34,7 +37,7 @@ down: ## Stop local stack
 logs: ## Follow compose logs
 	$(COMPOSE) logs -f
 
-test: contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test ## Fan-out tests
+test: contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test ## Fan-out tests
 	@echo "==> test: Go modules (go.work)"
 	@if command -v go >/dev/null 2>&1; then \
 		go work sync 2>/dev/null || true; \
@@ -117,6 +120,16 @@ $(LAKE_VENV)/bin/pytest: $(LAKE_DIR)/requirements.txt
 
 lakehouse-test: $(LAKE_VENV)/bin/pytest ## Iceberg schema mapping + sqlite catalog appends
 	cd $(LAKE_DIR) && \
+		PYTHONPATH=.:.. \
+		.venv/bin/pytest -q
+
+$(ORCH_VENV)/bin/pytest: $(ORCH_DIR)/requirements.txt
+	$(PYTHON) -m venv $(ORCH_VENV)
+	$(ORCH_PIP) install -U pip
+	$(ORCH_PIP) install -r $(ORCH_DIR)/requirements.txt
+
+orchestration-test: $(ORCH_VENV)/bin/pytest ## Dagster assets + retrain decision logic
+	cd $(ORCH_DIR) && \
 		PYTHONPATH=.:.. \
 		.venv/bin/pytest -q
 

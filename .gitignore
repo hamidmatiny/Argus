@@ -65,3 +65,9 @@ drift-monitor/reports/*.html
 
 # Lakehouse local venv
 lakehouse/.venv/
+
+# Orchestration local venv + Dagster/Feast local state
+orchestration/.venv/
+orchestration/artifacts/
+orchestration/feature_store/data/*.parquet
+orchestration/feature_store/data/*.db

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +25,7 @@ def run_evidently_drift_report(
     Generate an Evidently DataDriftPreset report.
 
     Returns (html_path | None, feature_drift_scores).
+    Also writes a JSON sidecar (same stem + latest_drift_signal.json) for Dagster.
     Scores fall back to empty dict if Evidently is unavailable.
     """
     out_dir = reports_dir or REPORTS_DIR
@@ -37,10 +39,31 @@ def run_evidently_drift_report(
 
     try:
         scores, html_path = _run_evidently_v1(ref, cur, out_dir)
+        if html_path is not None:
+            _write_json_sidecar(html_path, scores, window_size=len(cur))
         return html_path, scores
     except Exception as exc:  # noqa: BLE001
         logger.warning("evidently_report_failed", extra={"error": str(exc)})
         return None, {}
+
+
+def _write_json_sidecar(
+    html_path: Path, scores: dict[str, float], *, window_size: int
+) -> Path:
+    """Persist machine-readable drift scores next to the HTML report."""
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "html_report": html_path.name,
+        "window_size": window_size,
+        "feature_scores": scores,
+        "drifted_feature_count": sum(1 for v in scores.values() if float(v) > 0.0),
+        "max_drift_score": max((float(v) for v in scores.values()), default=0.0),
+    }
+    json_path = html_path.with_suffix(".json")
+    json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    latest = html_path.parent / "latest_drift_signal.json"
+    latest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return json_path
 
 
 def _run_evidently_v1(

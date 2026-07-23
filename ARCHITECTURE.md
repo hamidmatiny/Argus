@@ -19,7 +19,7 @@ This document describes the system design for ARGUS: responsibilities, data cont
 | **ingestion (Ray)** | Simulator publishes Avro to `telemetry.raw`; Ray DataStreamer actors normalize to `telemetry.normalized` |
 | **stream-processor (Flink / local)** | Streaming QA gate: Pandera-equivalent checks → `telemetry.validated` / `telemetry.quarantine` / `telemetry.qa_metrics` |
 | **lakehouse (Iceberg)** | Kafka → Iceberg (`fleet.telemetry`, `fleet.quarantine`) via REST/Glue + MinIO/S3; Trino SQL |
-| **orchestration (Dagster)** | Assets, schedules, sensors; ties lakehouse to ML and drift jobs |
+| **orchestration (Dagster)** | Feature-stats / quarantine-audit assets; Evidently → MLflow + Kafka retrain events; optional Feast |
 | **drift-monitor** | KS + embedding + Evidently on `telemetry.validated`; publish `IncidentEvent` to `incidents.raw` |
 | **incident-engine** | Correlate QA/drift/SLO signals into incidents |
 | **api-gateway** | Authn/authz (OPA), rate limits, north-south API surface |

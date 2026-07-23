@@ -61,7 +61,7 @@ fleet devices/SDKs  ──┘       │
 | `stream-processor/` | Python (PyFlink + local) | QA gate → validated / quarantine / qa_metrics | Phase 3 |
 | `drift-monitor/` | Python | KS + Evidently drift on validated → `incidents.raw` | Phase 4 |
 | `lakehouse/` | Python + SQL | Iceberg `fleet.telemetry` / `fleet.quarantine` + Trino | Phase 5 |
-| `orchestration/` | Python (Dagster) | Asset jobs, sensors, ML lifecycle | Later |
+| `orchestration/` | Python (Dagster) | Assets + MLflow retrain lineage (+ optional Feast) | Phase 6 |
 | `incident-engine/` | Go | Alert correlation and incidents | Later |
 | `api-gateway/` | Go | Authz (OPA), routing, public APIs | Later |
 | `observability/` | YAML/+ | OTel, dashboards, SLO alerts | Later |
