@@ -39,7 +39,7 @@ Roles drive UI: operators/admins see Acknowledge / Resolve; viewers do not.
 | Var | Default | Purpose |
 |-----|---------|---------|
 | `NEXTAUTH_URL` | `http://localhost:3002` | Auth callbacks |
-| `NEXTAUTH_SECRET` | (dev default) | Session encryption |
+| `NEXTAUTH_SECRET` | *(required)* | Session encryption — `openssl rand -base64 32` |
 | `KEYCLOAK_ISSUER` | `http://localhost:8085/realms/argus` | OIDC issuer |
 | `KEYCLOAK_CLIENT_ID` | `argus-dashboard` | OIDC client |
 | `KEYCLOAK_CLIENT_SECRET` | `argus-dashboard-secret` | OIDC secret |
@@ -48,6 +48,10 @@ Roles drive UI: operators/admins see Acknowledge / Resolve; viewers do not.
 | `DAGSTER_GRAPHQL_URL` | `http://localhost:3000/graphql` | Pipeline |
 | `MLFLOW_TRACKING_URI` | `http://localhost:5002` | Pipeline |
 | `AUTH_DEMO_OFFLINE` | `false` | Offline demo login |
+
+Copy `dashboard/.env.example` → `.env.local` for `npm run dev`, and set
+`NEXTAUTH_SECRET` in the **repo-root** `.env` for Compose (same Phase 10 block
+as `.env.example`).
 
 ### Docker Compose
 

@@ -909,9 +909,12 @@ services:
         KEYCLOAK_ISSUER: http://localhost:8085/realms/argus
         NEXTAUTH_URL: http://localhost:3002
     container_name: argus-dashboard
+    # Values come from the project-root `.env` (Compose auto-loads it for ${…}
+    # substitution). See `.env.example` Phase 10 — generate NEXTAUTH_SECRET with
+    # `openssl rand -base64 32`.
     environment:
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3002}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-argus-dashboard-dev-secret-change-me}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:?set NEXTAUTH_URL in .env}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?set NEXTAUTH_SECRET in .env \(openssl rand -base64 32\)}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8085/realms/argus}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-argus-dashboard}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-argus-dashboard-secret}
