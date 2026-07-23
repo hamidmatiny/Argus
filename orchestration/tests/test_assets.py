@@ -114,3 +114,52 @@ def test_trigger_retraining_op_skips_when_not_needed():
     )
     assert out["triggered"] is False
     assert out["synthetic_seed"]["seeded"] is False
+
+
+def test_seed_synthetic_invokes_run_pipeline_when_enabled(tmp_path, monkeypatch):
+    """Enabled path must call run_pipeline (mocked) — not only the skip branches."""
+    from dagster import build_op_context
+
+    import argus_orchestration.ops as ops_mod
+    import argus_pipeline.runner as runner_mod
+
+    monkeypatch.setattr(ops_mod, "SEED_SYNTHETIC_FROM_DRIFT", True)
+    monkeypatch.setattr(ops_mod, "SYNTHETIC_SCENARIO_FRAMES", 8)
+    monkeypatch.setenv("ORCH_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
+
+    calls: list[dict] = []
+
+    def _fake_run_pipeline(config):  # noqa: ANN001
+        calls.append(dict(config))
+        return {
+            "batch_sizes": {"scenario_runner": 8, "physics": 8},
+            "sinks": {
+                "scenario_ground_truth": {"rows": 8, "table": "fleet.scenario_ground_truth"},
+                "synthetic_sensor_data": {"rows": 8, "table": "fleet.synthetic_sensor_data"},
+            },
+        }
+
+    # Op imports run_pipeline inside the function body — patch the module attribute.
+    monkeypatch.setattr(runner_mod, "run_pipeline", _fake_run_pipeline)
+
+    decision = {
+        "should_retrain": True,
+        "reason": "max_drift_score",
+        "max_drift_score": 0.9,
+        "drifted_feature_count": 2,
+        "feature_scores": {"brake_pressure": 0.9, "speed_mph": 0.2},
+        "window_size": 100,
+        "source_report": None,
+    }
+    out = ops_mod.seed_synthetic_scenarios_from_incident(build_op_context(), decision)
+
+    assert out["seeded"] is True
+    assert out["scenario_type"] == "hard_brake"
+    assert out["drift_signature"]["brake_pressure"] == 0.9
+    assert len(calls) == 1
+    assert calls[0]["scenario_type"] == "hard_brake"
+    assert calls[0]["n_frames"] == 8
+    assert calls[0]["catalog_type"] == "sqlite"
+    assert "sim_warehouse" in calls[0]["warehouse"]
+    assert out["batch_sizes"]["scenario_runner"] == 8
+    assert out["sinks"]["synthetic_sensor_data"]["rows"] == 8

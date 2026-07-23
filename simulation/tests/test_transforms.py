@@ -88,17 +88,3 @@ def test_fuse_rendered_data_output_shape(pipeline_config):
         assert row["camera_digest"]
         assert row["lidar_digest"]
         assert row["renderer_backend"] == "classical_proxy"
-
-
-def test_incident_seeding_picks_hard_brake_for_brake_drift():
-    from argus_pipeline.incident_seeding import scenario_params_from_drift_decision
-
-    params = scenario_params_from_drift_decision(
-        {
-            "feature_scores": {"brake_pressure": 0.9, "speed_mph": 0.2},
-            "reason": "max_drift_score",
-            "max_drift_score": 0.9,
-        }
-    )
-    assert params["scenario_type"] == "hard_brake"
-    assert params["drift_signature"]["brake_pressure"] == 0.9
