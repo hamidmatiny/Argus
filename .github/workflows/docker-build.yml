@@ -263,7 +263,8 @@ jobs:
         run: docker load -i "/tmp/images/${{ matrix.name }}.tar"
 
       - name: Trivy scan (fail on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        # Tag must include the leading "v" (0.28.0 does not resolve on the marketplace).
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ matrix.tag }}
           format: table
