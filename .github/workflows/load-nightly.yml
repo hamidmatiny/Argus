@@ -37,12 +37,20 @@ jobs:
           cp .env.example .env
           echo "API_GATEWAY_AUTH_DISABLED=true" >> .env
           echo "NEXTAUTH_SECRET=load-ci-secret" >> .env
+          # Default demo limit is 20 RPS / burst 40 — 10 VUs × ~5 iter/s ≈ 50
+          # authenticated req/s, which 429s ~60% of /v1/incidents and trips
+          # http_req_failed. Raise limits for this latency SLO job.
+          echo "API_GATEWAY_RATE_LIMIT_RPS=200" >> .env
+          echo "API_GATEWAY_RATE_LIMIT_BURST=400" >> .env
           docker compose up -d --build --wait redpanda keycloak incident-engine trino api-gateway || \
             docker compose up -d --build redpanda keycloak incident-engine trino api-gateway
           for i in $(seq 1 40); do
             curl -sf http://localhost:8099/health && break
             sleep 5
           done
+          # Warm authenticated path once before k6 (incident-engine + gateway).
+          curl -sf -H "X-API-Key: demo-viewer" "http://localhost:8099/v1/incidents?status=open" >/dev/null || true
+          curl -sf "http://localhost:8099/v1/ping" >/dev/null || true
 
       - name: Setup k6
         uses: grafana/setup-k6-action@v1

@@ -13,19 +13,38 @@ const errorRate = new Rate("errors");
 const pingLatency = new Trend("ping_latency_ms", true);
 
 export const options = {
-  vus: VUS,
-  duration: DURATION,
+  scenarios: {
+    // Short warmup so cold JWT/handler paths are not mixed into SLO samples.
+    warmup: {
+      executor: "constant-vus",
+      vus: Math.min(2, VUS),
+      duration: "15s",
+      gracefulStop: "5s",
+      startTime: "0s",
+      tags: { phase: "warmup" },
+      exec: "traffic",
+    },
+    load: {
+      executor: "constant-vus",
+      vus: VUS,
+      duration: DURATION,
+      gracefulStop: "30s",
+      startTime: "15s",
+      tags: { phase: "load" },
+      exec: "traffic",
+    },
+  },
   thresholds: {
-    // Latency SLO: p95 ping under 500ms; error rate under 5%
-    ping_latency_ms: ["p(95)<500"],
-    errors: ["rate<0.05"],
-    http_req_failed: ["rate<0.05"],
+    // Latency SLO: p95 ping under 500ms; error rate under 5% (load phase only).
+    "ping_latency_ms{phase:load}": ["p(95)<500"],
+    "errors{phase:load}": ["rate<0.05"],
+    "http_req_failed{phase:load}": ["rate<0.05"],
   },
 };
 
-export default function () {
-  const headers = { "X-API-Key": API_KEY, Accept: "application/json" };
+const headers = { "X-API-Key": API_KEY, Accept: "application/json" };
 
+export function traffic() {
   const ping = http.get(`${GATEWAY}/v1/ping`, { headers });
   pingLatency.add(ping.timings.duration);
   const pingOk = check(ping, {
@@ -37,13 +56,16 @@ export default function () {
   const health = http.get(`${GATEWAY}/health`);
   check(health, { "health 200": (r) => r.status === 200 });
 
-  const incidents = http.get(`${GATEWAY}/v1/incidents?status=open`, { headers });
-  const incOk = check(incidents, {
-    "incidents 200|401|403": (r) => [200, 401, 403].includes(r.status),
+  // Auth'd route — mark 200 as the expected success for http_req_failed accounting.
+  // (429 would also fail the SLO; Load Nightly raises gateway RPS so this stays green.)
+  const incidents = http.get(`${GATEWAY}/v1/incidents?status=open`, {
+    headers,
+    responseCallback: http.expectedStatuses(200),
   });
-  // Auth disabled / demo key should typically be 200
-  if (incidents.status >= 500) errorRate.add(1);
-  else errorRate.add(!incOk && incidents.status >= 400 && incidents.status < 500 ? 0 : 0);
+  const incOk = check(incidents, {
+    "incidents 200": (r) => r.status === 200,
+  });
+  errorRate.add(!incOk);
 
   sleep(0.2);
 }
