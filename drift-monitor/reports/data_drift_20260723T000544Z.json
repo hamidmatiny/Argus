@@ -1,0 +1,13 @@
+{
+  "generated_at": "2026-07-23T00:05:45.003245+00:00",
+  "html_report": "data_drift_20260723T000544Z.html",
+  "window_size": 50,
+  "feature_scores": {
+    "speed_mph": 1.0699689423937606e-17,
+    "brake_pressure": 3.9858663257973207e-17,
+    "lidar_temp_c": 1.5125423168580682e-12,
+    "compute_load_pct": 1.7196131675749554e-15
+  },
+  "drifted_feature_count": 4,
+  "max_drift_score": 1.5125423168580682e-12
+}
