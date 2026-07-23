@@ -514,7 +514,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./drift-monitor/reports:/opt/dagster/app/drift_reports
+      - drift-reports-data:/opt/dagster/app/drift_reports
       - dagster-storage:/opt/dagster/storage
       - orchestration-artifacts:/opt/dagster/app/artifacts
     depends_on:
@@ -562,7 +562,7 @@ services:
       ORCH_RETRAIN_MAX_SCORE_THRESHOLD: ${ORCH_RETRAIN_MAX_SCORE_THRESHOLD:-0.5}
       ORCH_RETRAIN_MIN_DRIFTED_FEATURES: ${ORCH_RETRAIN_MIN_DRIFTED_FEATURES:-2}
     volumes:
-      - ./drift-monitor/reports:/opt/dagster/app/drift_reports
+      - drift-reports-data:/opt/dagster/app/drift_reports
       - dagster-storage:/opt/dagster/storage
       - orchestration-artifacts:/opt/dagster/app/artifacts
     depends_on:
@@ -598,13 +598,15 @@ services:
       DRIFT_HEALTH_PORT: "8094"
       DRIFT_METRICS_PORT: "8095"
       DRIFT_REPORTS_DIR: /app/drift-monitor/reports
+      DRIFT_EVIDENTLY_EVERY_N_WINDOWS: ${DRIFT_EVIDENTLY_EVERY_N_WINDOWS:-30}
+      DRIFT_REPORTS_MAX_FILES: ${DRIFT_REPORTS_MAX_FILES:-48}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       ARGUS_AVRO_SCHEMA_PATH: /app/shared/avro/telemetry_event.avsc
     ports:
       - "8094:8094"
       - "8095:8095"
     volumes:
-      - ./drift-monitor/reports:/app/drift-monitor/reports
+      - drift-reports-data:/app/drift-monitor/reports
     depends_on:
       redpanda:
         condition: service_healthy
@@ -661,3 +663,4 @@ volumes:
   mlflow-artifacts:
   dagster-storage:
   orchestration-artifacts:
+  drift-reports-data:

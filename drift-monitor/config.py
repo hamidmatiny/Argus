@@ -50,5 +50,12 @@ SCHEMA_REGISTRY_URL = os.getenv("SCHEMA_REGISTRY_URL", "http://localhost:18081")
 HEALTH_PORT = int(os.getenv("DRIFT_HEALTH_PORT", "8094"))
 METRICS_PORT = int(os.getenv("DRIFT_METRICS_PORT", "8095"))
 
-# How often (records) to run Evidently + persist HTML under reports/.
-EVIDENTLY_EVERY_N_WINDOWS = int(os.getenv("DRIFT_EVIDENTLY_EVERY_N_WINDOWS", "1"))
+# How often (non-overlapping / tumbling windows of DRIFT_WINDOW_SIZE) to run
+# Evidently + persist HTML/JSON. Sliding KS/Prometheus still score every
+# record; Evidently is a periodic deep-dive (default every 30 tumbling windows
+# ≈ 30×WINDOW_SIZE events).
+EVIDENTLY_EVERY_N_WINDOWS = int(os.getenv("DRIFT_EVIDENTLY_EVERY_N_WINDOWS", "30"))
+
+# Keep only the newest N timestamped report stems (html + json sidecars).
+# latest_drift_signal.json is always retained. Set <=0 to disable pruning.
+REPORTS_MAX_FILES = int(os.getenv("DRIFT_REPORTS_MAX_FILES", "48"))

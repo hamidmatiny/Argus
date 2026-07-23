@@ -60,7 +60,7 @@ ingestion/.venv/
 stream-processor/.venv/
 
 # Drift-monitor local venv + generated Evidently/KS reports
-# (bind-mounted for host inspection; never commit runtime artifacts)
+# Compose uses named volume drift-reports-data; keep ignore for local runs.
 drift-monitor/.venv/
 drift-monitor/reports/*
 !drift-monitor/reports/.gitkeep

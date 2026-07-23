@@ -10,9 +10,78 @@ from typing import Any
 
 import pandas as pd
 
-from config import DRIFT_FEATURES, REPORTS_DIR
+from config import (
+    DRIFT_FEATURES,
+    DRIFT_WINDOW_SIZE,
+    EVIDENTLY_EVERY_N_WINDOWS,
+    REPORTS_DIR,
+    REPORTS_MAX_FILES,
+)
 
 logger = logging.getLogger("argus.drift_monitor.evidently")
+
+
+def should_run_evidently(
+    windows: int,
+    *,
+    every_n: int = EVIDENTLY_EVERY_N_WINDOWS,
+    window_size: int = DRIFT_WINDOW_SIZE,
+) -> bool:
+    """
+    True once every ``every_n`` tumbling windows of ``window_size`` slides.
+
+    Sliding KS may run every record; Evidently should not.
+    """
+    window_len = max(window_size, 1)
+    if windows <= 0 or windows % window_len != 0:
+        return False
+    tumbling = windows // window_len
+    return tumbling > 0 and tumbling % max(every_n, 1) == 0
+
+
+def prune_old_reports(
+    reports_dir: Path, *, max_reports: int | None = None
+) -> int:
+    """
+    Keep only the newest ``max_reports`` timestamped ``data_drift_*`` stems.
+
+    Deletes matching ``.html`` / ``.json`` sidecars beyond the cap.
+    Never removes ``latest_drift_signal.json``. Returns files deleted.
+    """
+    limit = REPORTS_MAX_FILES if max_reports is None else max_reports
+    if limit <= 0:
+        return 0
+
+    by_stem: dict[str, list[Path]] = {}
+    for path in reports_dir.glob("data_drift_*.*"):
+        if path.suffix not in {".html", ".json"}:
+            continue
+        by_stem.setdefault(path.stem, []).append(path)
+
+    if len(by_stem) <= limit:
+        return 0
+
+    def stem_mtime(stem: str) -> float:
+        return max(p.stat().st_mtime for p in by_stem[stem])
+
+    ordered = sorted(by_stem.keys(), key=stem_mtime, reverse=True)
+    removed = 0
+    for stem in ordered[limit:]:
+        for path in by_stem[stem]:
+            try:
+                path.unlink(missing_ok=True)
+                removed += 1
+            except OSError as exc:
+                logger.warning(
+                    "report_prune_failed",
+                    extra={"path": str(path), "error": str(exc)},
+                )
+    if removed:
+        logger.info(
+            "report_prune_complete",
+            extra={"removed": removed, "kept": limit},
+        )
+    return removed
 
 
 def run_evidently_drift_report(
@@ -20,6 +89,7 @@ def run_evidently_drift_report(
     current: pd.DataFrame,
     *,
     reports_dir: Path | None = None,
+    max_reports: int | None = None,
 ) -> tuple[Path | None, dict[str, float]]:
     """
     Generate an Evidently DataDriftPreset report.
@@ -41,6 +111,7 @@ def run_evidently_drift_report(
         scores, html_path = _run_evidently_v1(ref, cur, out_dir)
         if html_path is not None:
             _write_json_sidecar(html_path, scores, window_size=len(cur))
+            prune_old_reports(out_dir, max_reports=max_reports)
         return html_path, scores
     except Exception as exc:  # noqa: BLE001
         logger.warning("evidently_report_failed", extra={"error": str(exc)})

@@ -29,7 +29,6 @@ from analyzer import DriftAnalyzer, should_raise_incident  # noqa: E402
 from config import (  # noqa: E402
     DRIFT_FEATURES,
     DRIFT_MIN_FEATURES_FOR_INCIDENT,
-    EVIDENTLY_EVERY_N_WINDOWS,
     GROUP_ID,
     HEALTH_PORT,
     INCIDENTS_TOPIC,
@@ -38,7 +37,10 @@ from config import (  # noqa: E402
     REPORTS_DIR,
     SOURCE_TOPIC,
 )
-from evidently_report import run_evidently_drift_report  # noqa: E402
+from evidently_report import (  # noqa: E402
+    run_evidently_drift_report,
+    should_run_evidently,
+)
 from incidents import IncidentPublisher, build_incident_event  # noqa: E402
 from metrics_server import DriftMetrics, start_http_server  # noqa: E402
 
@@ -228,7 +230,7 @@ def run() -> int:
                 _stats["last_drifted_features"] = report.get("drifted_features", [])
 
                 if (
-                    windows % max(EVIDENTLY_EVERY_N_WINDOWS, 1) == 0
+                    should_run_evidently(windows)
                     and analyzer._baseline_df is not None
                     and analyzer._last_window_df is not None
                 ):

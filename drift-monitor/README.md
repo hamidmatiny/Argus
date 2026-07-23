@@ -34,8 +34,13 @@ sees already passed Pandera-equivalent checks.
    Euclidean distance are checked against
    `EMBEDDING_COSINE_SIM_THRESHOLD` / `EMBEDDING_EUCLIDEAN_THRESHOLD`, plus a KS
    on embedding L2 norms (sentinel-ray pattern).
-4. **Evidently AI** — each evaluation window also runs `DataDriftPreset`; HTML
-   lands in `DRIFT_REPORTS_DIR`, and per-feature scores feed Prometheus gauges.
+4. **Evidently AI** — every `DRIFT_EVIDENTLY_EVERY_N_WINDOWS` **tumbling**
+   windows (default `30` × `DRIFT_WINDOW_SIZE` events), run `DataDriftPreset`
+   and write HTML + JSON under `DRIFT_REPORTS_DIR`. Sliding KS / Prometheus
+   feature scores still update every record; Evidently is a periodic deep-dive,
+   not a per-slide artifact. On each write, prune older `data_drift_*` stems so
+   at most `DRIFT_REPORTS_MAX_FILES` (default `48`) remain;
+   `latest_drift_signal.json` is always kept for Dagster.
 5. **Incidents** — if `drifted_feature_count >= DRIFT_MIN_FEATURES_FOR_INCIDENT`
    (default `2`), publish a structured `IncidentEvent` (shared proto / JSON) to
    `incidents.raw` for incident-engine (Phase 7).
@@ -45,7 +50,7 @@ sees already passed Pandera-equivalent checks.
 ```text
 telemetry.validated ──► drift-monitor ──► incidents.raw
                               │
-                              ├── Evidently HTML reports/
+                              ├── Evidently reports (compose: drift-reports-data)
                               └── Prometheus /metrics
 ```
 
@@ -68,7 +73,23 @@ telemetry.validated ──► drift-monitor ──► incidents.raw
 | `DRIFT_ALPHA` | `0.05` | KS significance |
 | `DRIFT_MIN_FEATURES_FOR_INCIDENT` | `2` | Incident threshold (sentinel-ray) |
 | `DRIFT_USE_LIVE_BASELINE` | `true` | Accumulate live reference (default); `false` seeds synthetic cold-start only |
+| `DRIFT_EVIDENTLY_EVERY_N_WINDOWS` | `30` | Run Evidently every N tumbling windows (`N × WINDOW_SIZE` events) |
+| `DRIFT_REPORTS_MAX_FILES` | `48` | Max timestamped `data_drift_*` stems kept; `<=0` disables prune |
+| `DRIFT_REPORTS_DIR` | `./reports` | Report output dir (compose mounts named volume `drift-reports-data`) |
 | `DRIFT_HEALTH_PORT` / `DRIFT_METRICS_PORT` | `8094` / `8095` | HTTP |
+
+### Reports storage
+
+Compose stores Evidently HTML/JSON on the named volume `drift-reports-data`
+(shared with Dagster), matching other generated state (`mlflow-artifacts`,
+`orchestration-artifacts`, `dagster-storage`). Local non-Docker runs still write
+to `drift-monitor/reports/`, which is gitignored (`.gitkeep` only).
+
+```bash
+# inspect reports inside the running container
+docker compose exec drift-monitor ls -lt /app/drift-monitor/reports | head
+docker compose cp drift-monitor:/app/drift-monitor/reports/latest_drift_signal.json -
+```
 
 ## Run
 
