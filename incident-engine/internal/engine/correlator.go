@@ -203,13 +203,8 @@ func (c *Correlator) evaluate(
 		"consecutive_failures":    streak,
 		"drifted_feature_count":   driftCount,
 	}
-	esc := webhook.BuildEscalated(
-		vehicleID,
-		dec,
-		metricsMap,
-		c.cfg.SlackChannel,
-		c.cfg.PagerDutyRoutingKey,
-	)
+
+	esc, isUpdate := c.upsertOpenIncident(vehicleID, dec, metricsMap)
 
 	payload, err := json.Marshal(esc)
 	if err != nil {
@@ -227,20 +222,57 @@ func (c *Correlator) evaluate(
 	}
 	c.metrics.EscalationsPublished.Inc()
 
+	if isUpdate {
+		slog.Warn("circuit_breaker_retrip",
+			"vehicle_id", vehicleID,
+			"reasons", dec.Reasons,
+			"route", dec.Route,
+			"incident_id", esc.IncidentID,
+			"retrip_count", esc.RetripCount,
+		)
+	} else {
+		slog.Warn("circuit_breaker_tripped",
+			"vehicle_id", vehicleID,
+			"reasons", dec.Reasons,
+			"route", dec.Route,
+			"incident_id", esc.IncidentID,
+		)
+	}
+	return nil
+}
+
+// upsertOpenIncident creates a fresh episode or refreshes an existing open one
+// for vehicleID (including the synthetic "fleet" key). Same incident_id /
+// PagerDuty dedup_key across HalfOpen→Open retrips.
+func (c *Correlator) upsertOpenIncident(
+	vehicleID string,
+	dec models.PolicyDecision,
+	metricsMap map[string]any,
+) (models.EscalatedIncident, bool) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for i := range c.incidents {
+		inc := &c.incidents[i]
+		if inc.VehicleID != vehicleID || !inc.Open {
+			continue
+		}
+		webhook.RefreshEscalated(inc, dec, metricsMap, c.cfg.SlackChannel, c.cfg.PagerDutyRoutingKey)
+		return inc.EscalatedIncident, true
+	}
+
+	esc := webhook.BuildEscalated(
+		vehicleID,
+		dec,
+		metricsMap,
+		c.cfg.SlackChannel,
+		c.cfg.PagerDutyRoutingKey,
+	)
 	c.incidents = append(c.incidents, models.IncidentRecord{EscalatedIncident: esc, Open: true})
 	if len(c.incidents) > 500 {
 		c.incidents = c.incidents[len(c.incidents)-500:]
 	}
-	c.mu.Unlock()
-
-	slog.Warn("circuit_breaker_tripped",
-		"vehicle_id", vehicleID,
-		"reasons", dec.Reasons,
-		"route", dec.Route,
-		"incident_id", esc.IncidentID,
-	)
-	return nil
+	return esc, false
 }
 
 // resolveVehicleOpenIncidents marks all open incidents for vehicleID resolved.

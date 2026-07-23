@@ -118,20 +118,21 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
-// BuildEscalated constructs the incidents.escalated document.
+// BuildEscalated constructs a fresh incidents.escalated document (new episode).
 func BuildEscalated(
 	vehicleID string,
 	dec models.PolicyDecision,
 	metrics map[string]any,
 	slackChannel, pdKey string,
 ) models.EscalatedIncident {
-	id := fmt.Sprintf("esc_%s_%d", vehicleID, time.Now().UTC().UnixNano())
+	now := time.Now().UTC().Format(time.RFC3339Nano)
 	esc := models.EscalatedIncident{
-		IncidentID:            id,
+		IncidentID:            fmt.Sprintf("esc_%s_%d", vehicleID, time.Now().UTC().UnixNano()),
 		VehicleID:             vehicleID,
 		Severity:              dec.Severity,
 		Status:                "open",
-		Timestamp:             time.Now().UTC().Format(time.RFC3339Nano),
+		Timestamp:             now,
+		LastUpdatedAt:         now,
 		CircuitBreakerTripped: true,
 		Summary: fmt.Sprintf(
 			"Circuit breaker tripped for %s: %s",
@@ -144,6 +145,32 @@ func BuildEscalated(
 	}
 	esc.NotificationChannels = BuildChannels(esc, slackChannel, pdKey)
 	return esc
+}
+
+// RefreshEscalated updates an existing open incident in place (retrip / continuation).
+// Keeps IncidentID and Timestamp (first-triggered-at); bumps LastUpdatedAt and RetripCount.
+func RefreshEscalated(
+	existing *models.IncidentRecord,
+	dec models.PolicyDecision,
+	metrics map[string]any,
+	slackChannel, pdKey string,
+) {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	existing.RetripCount++
+	existing.LastUpdatedAt = now
+	existing.Severity = dec.Severity
+	existing.Route = dec.Route
+	existing.Reasons = append([]string(nil), dec.Reasons...)
+	existing.Metrics = metrics
+	existing.Summary = fmt.Sprintf(
+		"Circuit breaker still open for %s (retrip %d): %s",
+		existing.VehicleID,
+		existing.RetripCount,
+		joinReasons(dec.Reasons),
+	)
+	existing.Status = "open"
+	existing.Open = true
+	existing.NotificationChannels = BuildChannels(existing.EscalatedIncident, slackChannel, pdKey)
 }
 
 func joinReasons(reasons []string) string {

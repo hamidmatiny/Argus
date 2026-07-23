@@ -61,7 +61,7 @@ threshold breaches.
 | `POST /webhooks/mock` | Local mock receiver (used when no real webhook URLs set) |
 | `GET /webhooks/mock/inbox` | Inspect mock deliveries |
 
-Incidents auto-resolve when a vehicle breaker recovers (`half_open` → `closed`).
+Incidents auto-resolve when a vehicle breaker recovers (`half_open` → `closed`). HalfOpen→Open retrips refresh the same open incident (same `incident_id` / PagerDuty `dedup_key`); a new id is minted only after resolution.
 
 ## Configuration
 

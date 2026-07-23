@@ -62,8 +62,10 @@ type EscalatedIncident struct {
 	VehicleID             string         `json:"vehicle_id"`
 	Severity              string         `json:"severity"`
 	Status                string         `json:"status"`
-	Timestamp             string         `json:"timestamp"`
+	Timestamp             string         `json:"timestamp"`                 // first-triggered-at (immutable)
+	LastUpdatedAt         string         `json:"last_updated_at,omitempty"` // refreshed on retrip
 	ResolvedAt            string         `json:"resolved_at,omitempty"`
+	RetripCount           int            `json:"retrip_count,omitempty"`
 	CircuitBreakerTripped bool           `json:"circuit_breaker_tripped"`
 	Summary               string         `json:"summary"`
 	Reasons               []string       `json:"reasons"`
