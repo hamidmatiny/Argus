@@ -59,9 +59,11 @@ ingestion/.venv/
 # Stream-processor local venv
 stream-processor/.venv/
 
-# Drift-monitor local venv + generated Evidently HTML
+# Drift-monitor local venv + generated Evidently/KS reports
+# (bind-mounted for host inspection; never commit runtime artifacts)
 drift-monitor/.venv/
-drift-monitor/reports/*.html
+drift-monitor/reports/*
+!drift-monitor/reports/.gitkeep
 
 # Lakehouse local venv
 lakehouse/.venv/
