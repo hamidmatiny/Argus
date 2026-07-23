@@ -216,9 +216,9 @@ jobs:
       - name: Install + test
         working-directory: orchestration
         run: |
-          python -m pip install -U pip
           python -m venv .venv
           . .venv/bin/activate
+          python -m pip install -U pip
           pip install -r requirements.txt
           pip install pytest pytest-cov ruff
           ruff check . || true
