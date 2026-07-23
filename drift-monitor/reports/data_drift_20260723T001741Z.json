@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-07-23T00:18:31.577962+00:00",
-  "html_report": "data_drift_20260723T001831Z.html",
+  "generated_at": "2026-07-23T00:17:42.080705+00:00",
+  "html_report": "data_drift_20260723T001741Z.html",
   "window_size": 50,
   "feature_scores": {
     "speed_mph": 3.034193927177243e-13,
