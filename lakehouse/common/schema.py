@@ -251,3 +251,192 @@ def quarantine_rows_to_arrow(rows: list[dict[str, Any]]):
         ],
         schema=schema,
     )
+
+
+# --- Simulation tables (scenario ground truth + synthetic sensors + calibration) ---
+
+SCENARIO_GROUND_TRUTH_SCHEMA = Schema(
+    NestedField(1, "scenario_id", StringType(), required=True),
+    NestedField(2, "scenario_type", StringType(), required=True),
+    NestedField(3, "frame_idx", DoubleType(), required=True),
+    NestedField(4, "timestamp", TimestamptzType(), required=True),
+    NestedField(5, "ego_vehicle_id", StringType(), required=True),
+    NestedField(6, "agents_json", StringType(), required=True),
+    NestedField(7, "world_rewards_json", StringType(), required=True),
+    NestedField(8, "origin_lat", DoubleType(), required=True),
+    NestedField(9, "origin_lon", DoubleType(), required=True),
+)
+
+SCENARIO_GROUND_TRUTH_PARTITION_SPEC = PartitionSpec(
+    PartitionField(
+        source_id=2,
+        field_id=1000,
+        transform=IdentityTransform(),
+        name="scenario_type",
+    ),
+    PartitionField(
+        source_id=4,
+        field_id=1001,
+        transform=DayTransform(),
+        name="event_day",
+    ),
+)
+
+SYNTHETIC_SENSOR_SCHEMA = Schema(
+    NestedField(1, "scenario_id", StringType(), required=True),
+    NestedField(2, "scenario_type", StringType(), required=True),
+    NestedField(3, "frame_idx", DoubleType(), required=True),
+    NestedField(4, "timestamp", TimestamptzType(), required=True),
+    NestedField(5, "ego_vehicle_id", StringType(), required=True),
+    NestedField(6, "camera_digest", StringType(), required=True),
+    NestedField(7, "lidar_digest", StringType(), required=True),
+    NestedField(8, "camera_mean_intensity", DoubleType(), required=True),
+    NestedField(9, "lidar_n_points", DoubleType(), required=True),
+    NestedField(10, "agents_json", StringType(), required=True),
+    NestedField(11, "world_rewards_json", StringType(), required=True),
+    NestedField(12, "renderer_backend", StringType(), required=True),
+)
+
+SYNTHETIC_SENSOR_PARTITION_SPEC = PartitionSpec(
+    PartitionField(
+        source_id=2,
+        field_id=1000,
+        transform=IdentityTransform(),
+        name="scenario_type",
+    ),
+    PartitionField(
+        source_id=4,
+        field_id=1001,
+        transform=DayTransform(),
+        name="event_day",
+    ),
+)
+
+SENSOR_CALIBRATION_SCHEMA = Schema(
+    NestedField(1, "scenario_id", StringType(), required=True),
+    NestedField(2, "frame_idx", DoubleType(), required=True),
+    NestedField(3, "timestamp", TimestamptzType(), required=True),
+    NestedField(4, "ego_vehicle_id", StringType(), required=True),
+    NestedField(5, "camera_intrinsics_json", StringType(), required=True),
+    NestedField(6, "camera_extrinsics_json", StringType(), required=True),
+    NestedField(7, "lidar_intrinsics_json", StringType(), required=True),
+    NestedField(8, "lidar_extrinsics_json", StringType(), required=True),
+)
+
+SENSOR_CALIBRATION_PARTITION_SPEC = PartitionSpec(
+    PartitionField(
+        source_id=3,
+        field_id=1000,
+        transform=DayTransform(),
+        name="event_day",
+    ),
+)
+
+
+def map_scenario_ground_truth_record(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scenario_id": str(record["scenario_id"]),
+        "scenario_type": str(record["scenario_type"]),
+        "frame_idx": float(record["frame_idx"]),
+        "timestamp": parse_event_timestamp(record["timestamp"]),
+        "ego_vehicle_id": str(record["ego_vehicle_id"]),
+        "agents_json": str(record["agents_json"]),
+        "world_rewards_json": str(record["world_rewards_json"]),
+        "origin_lat": float(record["origin_lat"]),
+        "origin_lon": float(record["origin_lon"]),
+    }
+
+
+def map_synthetic_sensor_record(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scenario_id": str(record["scenario_id"]),
+        "scenario_type": str(record["scenario_type"]),
+        "frame_idx": float(record["frame_idx"]),
+        "timestamp": parse_event_timestamp(record["timestamp"]),
+        "ego_vehicle_id": str(record["ego_vehicle_id"]),
+        "camera_digest": str(record["camera_digest"]),
+        "lidar_digest": str(record["lidar_digest"]),
+        "camera_mean_intensity": float(record["camera_mean_intensity"]),
+        "lidar_n_points": float(record["lidar_n_points"]),
+        "agents_json": str(record["agents_json"]),
+        "world_rewards_json": str(record["world_rewards_json"]),
+        "renderer_backend": str(record["renderer_backend"]),
+    }
+
+
+def map_sensor_calibration_record(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scenario_id": str(record["scenario_id"]),
+        "frame_idx": float(record["frame_idx"]),
+        "timestamp": parse_event_timestamp(record["timestamp"]),
+        "ego_vehicle_id": str(record["ego_vehicle_id"]),
+        "camera_intrinsics_json": str(record["camera_intrinsics_json"]),
+        "camera_extrinsics_json": str(record["camera_extrinsics_json"]),
+        "lidar_intrinsics_json": str(record["lidar_intrinsics_json"]),
+        "lidar_extrinsics_json": str(record["lidar_extrinsics_json"]),
+    }
+
+
+def scenario_ground_truth_rows_to_arrow(rows: list[dict[str, Any]]):
+    import pyarrow as pa
+
+    schema = pa.schema(
+        [
+            pa.field("scenario_id", pa.string(), nullable=False),
+            pa.field("scenario_type", pa.string(), nullable=False),
+            pa.field("frame_idx", pa.float64(), nullable=False),
+            pa.field("timestamp", pa.timestamp("us", tz="UTC"), nullable=False),
+            pa.field("ego_vehicle_id", pa.string(), nullable=False),
+            pa.field("agents_json", pa.string(), nullable=False),
+            pa.field("world_rewards_json", pa.string(), nullable=False),
+            pa.field("origin_lat", pa.float64(), nullable=False),
+            pa.field("origin_lon", pa.float64(), nullable=False),
+        ]
+    )
+    if not rows:
+        return pa.Table.from_pylist([], schema=schema)
+    return pa.Table.from_pylist(rows, schema=schema)
+
+
+def synthetic_sensor_rows_to_arrow(rows: list[dict[str, Any]]):
+    import pyarrow as pa
+
+    schema = pa.schema(
+        [
+            pa.field("scenario_id", pa.string(), nullable=False),
+            pa.field("scenario_type", pa.string(), nullable=False),
+            pa.field("frame_idx", pa.float64(), nullable=False),
+            pa.field("timestamp", pa.timestamp("us", tz="UTC"), nullable=False),
+            pa.field("ego_vehicle_id", pa.string(), nullable=False),
+            pa.field("camera_digest", pa.string(), nullable=False),
+            pa.field("lidar_digest", pa.string(), nullable=False),
+            pa.field("camera_mean_intensity", pa.float64(), nullable=False),
+            pa.field("lidar_n_points", pa.float64(), nullable=False),
+            pa.field("agents_json", pa.string(), nullable=False),
+            pa.field("world_rewards_json", pa.string(), nullable=False),
+            pa.field("renderer_backend", pa.string(), nullable=False),
+        ]
+    )
+    if not rows:
+        return pa.Table.from_pylist([], schema=schema)
+    return pa.Table.from_pylist(rows, schema=schema)
+
+
+def sensor_calibration_rows_to_arrow(rows: list[dict[str, Any]]):
+    import pyarrow as pa
+
+    schema = pa.schema(
+        [
+            pa.field("scenario_id", pa.string(), nullable=False),
+            pa.field("frame_idx", pa.float64(), nullable=False),
+            pa.field("timestamp", pa.timestamp("us", tz="UTC"), nullable=False),
+            pa.field("ego_vehicle_id", pa.string(), nullable=False),
+            pa.field("camera_intrinsics_json", pa.string(), nullable=False),
+            pa.field("camera_extrinsics_json", pa.string(), nullable=False),
+            pa.field("lidar_intrinsics_json", pa.string(), nullable=False),
+            pa.field("lidar_extrinsics_json", pa.string(), nullable=False),
+        ]
+    )
+    if not rows:
+        return pa.Table.from_pylist([], schema=schema)
+    return pa.Table.from_pylist(rows, schema=schema)

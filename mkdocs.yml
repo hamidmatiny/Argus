@@ -74,6 +74,7 @@ nav:
       - drift-monitor: components/drift-monitor.md
       - lakehouse: components/lakehouse.md
       - orchestration: components/orchestration.md
+      - simulation: components/simulation.md
       - incident-engine: components/incident-engine.md
       - api-gateway: components/api-gateway.md
       - observability: components/observability.md

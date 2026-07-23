@@ -40,6 +40,12 @@ MLFLOW_EXPERIMENT = os.getenv("MLFLOW_EXPERIMENT_NAME", "argus-retraining")
 RETRAIN_MAX_SCORE_THRESHOLD = float(os.getenv("ORCH_RETRAIN_MAX_SCORE_THRESHOLD", "0.5"))
 RETRAIN_MIN_DRIFTED_FEATURES = int(os.getenv("ORCH_RETRAIN_MIN_DRIFTED_FEATURES", "2"))
 
+# Optional: seed simulation/ scenarios from drift signatures before trigger_retraining.
+SEED_SYNTHETIC_FROM_DRIFT = os.getenv(
+    "ORCH_SEED_SYNTHETIC_FROM_DRIFT", "true"
+).lower() in {"1", "true", "yes", "on"}
+SYNTHETIC_SCENARIO_FRAMES = int(os.getenv("ORCH_SYNTHETIC_SCENARIO_FRAMES", "16"))
+
 FEATURES = (
     "speed_mph",
     "brake_pressure",

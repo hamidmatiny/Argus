@@ -97,6 +97,7 @@ Also see `dashboard/docs/screenshots/*.png.txt` markers.
 | [`drift-monitor/`](./drift-monitor/) | KS + Evidently drift | [README](./drift-monitor/README.md) |
 | [`lakehouse/`](./lakehouse/) | Iceberg writers + Trino | [README](./lakehouse/README.md) |
 | [`orchestration/`](./orchestration/) | Dagster + MLflow | [README](./orchestration/README.md) |
+| [`simulation/`](./simulation/) | Scenario synthetic sensors (Sources→Transforms→Sinks) | [README](./simulation/README.md) |
 | [`incident-engine/`](./incident-engine/) | OPA + circuit breakers | [README](./incident-engine/README.md) |
 | [`api-gateway/`](./api-gateway/) | Authn/z edge API | [README](./api-gateway/README.md) |
 | [`observability/`](./observability/) | Metrics, logs, traces, alerts | [README](./observability/README.md) |
@@ -118,7 +119,7 @@ Also see `dashboard/docs/screenshots/*.png.txt` markers.
 | **Streaming** | Apache Kafka API, Redpanda, Amazon MSK, Ray, Apache Flink / PyFlink |
 | **Storage** | Apache Iceberg, MinIO, Amazon S3, AWS Glue, Trino, Parquet |
 | **Orchestration** | Dagster, Feast *(optional)*; AWS Lambda + Step Functions + EventBridge + SQS *(serverless ETL demo — not the production Kafka path; see [ADR 007](./docs/adr/007-serverless-etl-alongside-kafka.md))* |
-| **ML** | MLflow, Evidently, SciPy KS tests, embeddings (hash / OpenAI) |
+| **ML** | MLflow, Evidently, SciPy KS tests, embeddings (hash / OpenAI); scenario synthetic sensors *(classical renderer proxies — see [simulation/](./simulation/))* |
 | **Observability** | OpenTelemetry, Prometheus, Grafana, Loki, Promtail, Jaeger, Alertmanager |
 | **Security** | Keycloak (OIDC), OPA/Rego, API keys + RBAC, Trivy, Syft SBOM, Semgrep |
 | **Frontend** | Next.js (App Router), TypeScript, Tailwind, NextAuth, Recharts |

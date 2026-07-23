@@ -10,6 +10,7 @@ Each page summarizes a monorepo component and links to its canonical README on G
 | drift-monitor | Python | [drift-monitor](drift-monitor.md) | [drift-monitor/README.md](https://github.com/hamidmatiny/Argus/blob/main/drift-monitor/README.md) |
 | lakehouse | Python | [lakehouse](lakehouse.md) | [lakehouse/README.md](https://github.com/hamidmatiny/Argus/blob/main/lakehouse/README.md) |
 | orchestration | Python | [orchestration](orchestration.md) | [orchestration/README.md](https://github.com/hamidmatiny/Argus/blob/main/orchestration/README.md) |
+| simulation | Python | [simulation](simulation.md) | [simulation/README.md](https://github.com/hamidmatiny/Argus/blob/main/simulation/README.md) |
 | incident-engine | Go | [incident-engine](incident-engine.md) | [incident-engine/README.md](https://github.com/hamidmatiny/Argus/blob/main/incident-engine/README.md) |
 | api-gateway | Go | [api-gateway](api-gateway.md) | [api-gateway/README.md](https://github.com/hamidmatiny/Argus/blob/main/api-gateway/README.md) |
 | observability | YAML/+ | [observability](observability.md) | [observability/README.md](https://github.com/hamidmatiny/Argus/blob/main/observability/README.md) |

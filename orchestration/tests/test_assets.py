@@ -108,7 +108,9 @@ def test_trigger_retraining_op_skips_when_not_needed():
             "feature_scores": {},
             "window_size": 50,
         },
+        {"seeded": False, "reason": "no_retrain"},
         _NoopMLflow(),
         _NoopKafka(),
     )
     assert out["triggered"] is False
+    assert out["synthetic_seed"]["seeded"] is False

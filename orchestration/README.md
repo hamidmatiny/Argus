@@ -1,7 +1,8 @@
 # orchestration
 
 **Dagster** software-defined assets that close the ARGUS MLOps loop: Iceberg
-feature stats → Evidently drift decisions → **MLflow** lineage + Kafka
+feature stats → Evidently drift decisions → optional **synthetic scenario seed**
+([`simulation/`](../simulation/)) → **MLflow** lineage + Kafka
 `orchestration.retraining_triggered`. This replaces sentinel-ray’s ad-hoc
 “queue a retraining webhook” with a real orchestrator and observable asset graph.
 
@@ -28,9 +29,12 @@ drift-monitor Evidently JSON sidecars
         │
         ▼
 ┌───────────────────────────┐     drift_retrain_job
-│ retrain_decision          │────────┬──────────────► trigger_retraining op
+│ retrain_decision          │────────┬──────────────► seed_synthetic_scenarios_from_incident (optional)
 │  score / feature gates    │        │                      │
-└───────────────────────────┘        │              ┌───────┴────────┐
+└───────────────────────────┘        │                      ▼
+                                     │              trigger_retraining op
+                                     │                      │
+                                     │              ┌───────┴────────┐
                                      │              ▼                ▼
                                      │           MLflow run    Kafka topic
                                      │         (params+metrics)  orchestration.

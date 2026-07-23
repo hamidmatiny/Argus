@@ -1,6 +1,6 @@
 # ARGUS — root developer targets
 
-.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test cli-test sdk-python-test sdk-typescript-test copilot-test serverless-etl-test terraform-validate helm-lint register-avro logs docs docs-build help
+.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test cli-test sdk-python-test sdk-typescript-test copilot-test serverless-etl-test simulation-test terraform-validate helm-lint register-avro logs docs docs-build help
 
 COMPOSE ?= docker compose
 BUF ?= buf
@@ -27,6 +27,9 @@ ORCH_PIP := $(ORCH_VENV)/bin/pip
 SERVERLESS_ETL_DIR := infra/terraform/modules/serverless-etl/lambda
 SERVERLESS_ETL_VENV := $(SERVERLESS_ETL_DIR)/.venv
 SERVERLESS_ETL_PIP := $(SERVERLESS_ETL_VENV)/bin/pip
+SIMULATION_DIR := simulation
+SIMULATION_VENV := $(SIMULATION_DIR)/.venv
+SIMULATION_PIP := $(SIMULATION_VENV)/bin/pip
 
 docs: ## Serve MkDocs Material docs locally
 	$(PYTHON) -m pip install -q -r docs/requirements.txt
@@ -48,7 +51,7 @@ down: ## Stop local stack
 logs: ## Follow compose logs
 	$(COMPOSE) logs -f
 
-test: contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test cli-test sdk-python-test sdk-typescript-test serverless-etl-test ## Fan-out tests
+test: contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test cli-test sdk-python-test sdk-typescript-test serverless-etl-test simulation-test ## Fan-out tests
 	@echo "==> test: Go modules (go.work)"
 	@if command -v go >/dev/null 2>&1; then \
 		go work sync 2>/dev/null || true; \
@@ -155,6 +158,16 @@ $(SERVERLESS_ETL_VENV)/bin/pytest: $(SERVERLESS_ETL_DIR)/requirements.txt $(SERV
 serverless-etl-test: $(SERVERLESS_ETL_VENV)/bin/pytest ## Serverless ETL Lambda handlers (moto S3/Glue/SQS)
 	cd $(SERVERLESS_ETL_DIR) && \
 		PYTHONPATH=.:$(CURDIR):$(CURDIR)/shared/contracts \
+		.venv/bin/pytest -q
+
+$(SIMULATION_VENV)/bin/pytest: $(SIMULATION_DIR)/requirements.txt
+	$(PYTHON) -m venv $(SIMULATION_VENV)
+	$(SIMULATION_PIP) install -U pip
+	$(SIMULATION_PIP) install -r $(SIMULATION_DIR)/requirements.txt
+
+simulation-test: $(SIMULATION_VENV)/bin/pytest ## Scenario Sources→Transforms→Sinks pipeline
+	cd $(SIMULATION_DIR) && \
+		PYTHONPATH=.:..:../lakehouse \
 		.venv/bin/pytest -q
 
 incident-engine-test: ## Circuit breaker FSM + OPA/Rego policy unit tests

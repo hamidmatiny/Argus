@@ -1,0 +1,5 @@
+numpy>=1.26,<3
+pandas>=2.1,<4
+pyarrow>=15,<22
+pyiceberg[pyarrow,sql-sqlite,s3fs]>=0.7.1,<0.10
+pytest>=8.0,<10
