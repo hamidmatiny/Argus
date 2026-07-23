@@ -287,6 +287,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # Cap parallelism so 11 jobs don't stampede GitHub's release CDN at once
+      # (anchore/sbom-action's install.sh fails hard on transient 302/504).
+      max-parallel: 4
       matrix:
         include:
           - name: simulator
@@ -320,12 +323,35 @@ jobs:
       - name: Load image
         run: docker load -i "/tmp/images/${{ matrix.name }}.tar"
 
+      # Bypass anchore/sbom-action's install.sh (no retries; treats transient CDN
+      # 302/504 as fatal). Pin + retry a direct tarball install, then scan.
+      - name: Install syft
+        env:
+          SYFT_VERSION: "1.42.3"
+        run: |
+          set -euo pipefail
+          install_dir="${RUNNER_TEMP}/syft"
+          mkdir -p "$install_dir"
+          url="https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          ok=0
+          for attempt in 1 2 3 4 5; do
+            echo "syft install attempt ${attempt}"
+            if curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors "$url" \
+              | tar -xz -C "$install_dir" syft; then
+              ok=1
+              break
+            fi
+            sleep $((attempt * 5))
+          done
+          [[ "$ok" -eq 1 ]] || { echo "syft install failed after retries"; exit 1; }
+          echo "$install_dir" >> "$GITHUB_PATH"
+          "$install_dir/syft" version
+
       - name: Generate SBOM (syft)
-        uses: anchore/sbom-action@v0
-        with:
-          image: ${{ matrix.tag }}
-          format: spdx-json
-          output-file: sbom-${{ matrix.name }}.spdx.json
+        run: |
+          set -euo pipefail
+          syft scan "${{ matrix.tag }}" -o "spdx-json=sbom-${{ matrix.name }}.spdx.json"
+          test -s "sbom-${{ matrix.name }}.spdx.json"
 
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
