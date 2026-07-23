@@ -6,7 +6,17 @@ import { normalizeRole } from "@/lib/types";
 const issuer =
   process.env.KEYCLOAK_ISSUER ?? "http://localhost:8085/realms/argus";
 const clientId = process.env.KEYCLOAK_CLIENT_ID ?? "argus-dashboard";
-const clientSecret = process.env.KEYCLOAK_CLIENT_SECRET ?? "argus-dashboard-secret";
+// Demo Keycloak client secret — intentional fallback. Same value is public in
+// api-gateway/keycloak/argus-realm.json (local non-prod realm import).
+const clientSecret =
+  process.env.KEYCLOAK_CLIENT_SECRET ?? "argus-dashboard-secret";
+
+const nextAuthSecret = process.env.NEXTAUTH_SECRET;
+if (!nextAuthSecret) {
+  throw new Error(
+    "NEXTAUTH_SECRET is required. Generate one with `openssl rand -base64 32` and set it in dashboard/.env.local."
+  );
+}
 
 function rolesFromToken(payload: Record<string, unknown>): string[] {
   const roles: string[] = [];
@@ -134,5 +144,5 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/login",
   },
-  secret: process.env.NEXTAUTH_SECRET ?? "argus-dashboard-dev-secret-change-me",
+  secret: nextAuthSecret,
 };

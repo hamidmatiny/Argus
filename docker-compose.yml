@@ -908,6 +908,7 @@ services:
         ARGUS_GATEWAY_URL: http://api-gateway:8099
         KEYCLOAK_ISSUER: http://localhost:8085/realms/argus
         NEXTAUTH_URL: http://localhost:3002
+        NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?set NEXTAUTH_SECRET in .env \(openssl rand -base64 32\)}
     container_name: argus-dashboard
     # Values come from the project-root `.env` (Compose auto-loads it for ${…}
     # substitution). See `.env.example` Phase 10 — generate NEXTAUTH_SECRET with

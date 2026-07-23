@@ -12,10 +12,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG ARGUS_GATEWAY_URL=http://api-gateway:8099
 ARG KEYCLOAK_ISSUER=http://localhost:8085/realms/argus
 ARG NEXTAUTH_URL=http://localhost:3002
+# Required at build time because next build loads auth.ts (fail-fast if unset).
+# Runtime secret comes from compose/env — do not rely on this image layer value.
+ARG NEXTAUTH_SECRET
 ENV ARGUS_GATEWAY_URL=$ARGUS_GATEWAY_URL \
     KEYCLOAK_ISSUER=$KEYCLOAK_ISSUER \
     NEXTAUTH_URL=$NEXTAUTH_URL \
+    NEXTAUTH_SECRET=$NEXTAUTH_SECRET \
     AUTH_DEMO_OFFLINE=true
+RUN test -n "$NEXTAUTH_SECRET" || (echo "NEXTAUTH_SECRET build-arg is required" && exit 1)
 RUN npm run build
 
 FROM node:22-bookworm-slim AS runner
