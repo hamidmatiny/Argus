@@ -1,6 +1,6 @@
 # ARGUS — root developer targets
 
-.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test register-avro logs help
+.PHONY: up down test lint proto contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test cli-test register-avro logs help
 
 COMPOSE ?= docker compose
 BUF ?= buf
@@ -37,7 +37,7 @@ down: ## Stop local stack
 logs: ## Follow compose logs
 	$(COMPOSE) logs -f
 
-test: contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test ## Fan-out tests
+test: contracts-test ingestion-test stream-processor-test drift-monitor-test lakehouse-test orchestration-test incident-engine-test api-gateway-test cli-test ## Fan-out tests
 	@echo "==> test: Go modules (go.work)"
 	@if command -v go >/dev/null 2>&1; then \
 		go work sync 2>/dev/null || true; \
@@ -141,6 +141,9 @@ incident-engine-test: ## Circuit breaker FSM + OPA/Rego policy unit tests
 
 api-gateway-test: ## Gateway middleware, OPA RBAC, mocked upstream integration
 	cd api-gateway && go test ./...
+
+cli-test: ## argusctl secrets set/doctor unit tests
+	cd cli && go test ./...
 
 register-avro: ## Register TelemetryEvent Avro schema with local Schema Registry
 	bash shared/avro/register.sh

@@ -69,7 +69,7 @@ fleet devices/SDKs  ──┘       │
 | `dashboard/` | TypeScript | Operator UI | Later |
 | `sdk/python/` | Python | Client SDK for emitters and APIs | Later |
 | `sdk/typescript/` | TypeScript | Client SDK for web/Node | Later |
-| `cli/` | Go | Operator CLI (`argus`) | Later |
+| `cli/` | Go | Operator CLI (`argusctl`), secrets | Phase 9+ |
 | `infra/terraform/` | HCL | Cloud/EKS foundation | Later |
 | `infra/helm/` | YAML | Kubernetes charts | Later |
 | `infra/argocd/` | YAML | GitOps applications | Later |

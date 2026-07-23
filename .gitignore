@@ -17,6 +17,7 @@ dist/
 *.test
 coverage.out
 vendor/
+cli/argusctl
 
 # Python
 .venv/
