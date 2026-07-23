@@ -5,9 +5,10 @@
 # pip (python base / venv) — CVE in pip metadata; wait for slim base refresh
 CVE-2026-25087
 
-# Ray bundled jars (ray_dist.jar jackson-databind) — not a direct ARGUS pin
+# Ray bundled jars (ray_dist.jar jackson-*) — not a direct ARGUS pin
 CVE-2026-54512
 CVE-2026-54513
+GHSA-r7wm-3cxj-wff9
 
 # MLflow / Dagster Python deps in orchestration image
 CVE-2025-10279
@@ -29,6 +30,8 @@ CVE-2026-4137
 CVE-2026-41490
 
 # Next.js sharp / libvips native optional deps (dashboard)
+# GHSA wraps the libvips CVEs; Trivy reports the advisory id, not each CVE.
+GHSA-f88m-g3jw-g9cj
 CVE-2026-33327
 CVE-2026-33328
 CVE-2026-35590
