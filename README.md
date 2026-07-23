@@ -65,15 +65,15 @@ fleet devices/SDKs  ──┘       │
 | `incident-engine/` | Go | OPA policies + circuit breaker → `incidents.escalated` | Phase 7 |
 | `api-gateway/` | Go | gRPC+REST edge, Keycloak OIDC, OPA RBAC | Phase 9 |
 | `observability/` | YAML/+ | Prometheus, Grafana, Loki, Jaeger, Alertmanager | Phase 8 |
-| `ai-copilot/` | Python | NL query/explain over platform data | Later |
 | `dashboard/` | TypeScript | Operator UI (Next.js) | Phase 10 |
-| `sdk/python/` | Python | Client SDK for emitters and APIs | Later |
-| `sdk/typescript/` | TypeScript | Client SDK for web/Node | Later |
-| `cli/` | Go | Operator CLI (`argusctl`), secrets | Phase 9+ |
+| `sdk/python/` | Python | `argus-sdk` — gateway + ingest | Phase 11 |
+| `sdk/typescript/` | TypeScript | `@argus/sdk` — gateway client | Phase 11 |
+| `cli/` | Go | Operator CLI (`argusctl`), secrets + gateway ops | Phase 11 |
+| `examples/` | Multi | Third-party integration samples | Phase 11 |
+| `ai-copilot/` | Python | NL query/explain over platform data | Later |
 | `infra/terraform/` | HCL | Cloud/EKS foundation | Later |
 | `infra/helm/` | YAML | Kubernetes charts | Later |
 | `infra/argocd/` | YAML | GitOps applications | Later |
-| `examples/` | Multi | Sample producers and walkthroughs | Ongoing |
 | `docs/` | Markdown | ADRs, runbooks, guides | Ongoing |
 | `tests/e2e/` | Multi | Cross-service golden-path tests | Later |
 

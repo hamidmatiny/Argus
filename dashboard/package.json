@@ -13,6 +13,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@argus/sdk": "file:../sdk/typescript",
     "next": "^15.3.5",
     "next-auth": "^4.24.11",
     "react": "^19.0.0",

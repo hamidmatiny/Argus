@@ -1,11 +1,24 @@
 # cli (`argusctl`)
 
-Operator CLI for ARGUS. Current focus: **centralized credential management**.
+Operator CLI for ARGUS — secrets, gateway incidents/retrain/telemetry, and
+local stack health.
 
 ```bash
 cd cli && go build -o argusctl .
-./argusctl secrets set XAI_API_KEY="sk-..."
-./argusctl secrets doctor
+./argusctl --help
+```
+
+## Gateway commands
+
+Auth defaults: `ARGUS_GATEWAY_URL`, `ARGUS_API_KEY` (default `demo-operator`),
+or `ARGUS_TOKEN` (Bearer).
+
+```bash
+argusctl incidents list --status open
+argusctl incidents ack esc_1 --note "looking"
+argusctl retrain trigger --reason drift
+argusctl telemetry tail --max 5
+argusctl health
 ```
 
 ## Secrets

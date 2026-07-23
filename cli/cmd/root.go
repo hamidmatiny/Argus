@@ -26,4 +26,8 @@ func Execute() error {
 
 func init() {
 	Root.AddCommand(newSecretsCmd())
+	Root.AddCommand(newIncidentsCmd())
+	Root.AddCommand(newRetrainCmd())
+	Root.AddCommand(newTelemetryCmd())
+	Root.AddCommand(newHealthCmd())
 }
