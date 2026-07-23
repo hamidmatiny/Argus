@@ -323,3 +323,22 @@ def test_generated_proto_roundtrip(telemetry_pb):
     parsed.ParseFromString(msg.SerializeToString())
     assert parsed.vehicle_id == "VH-0001234"
     assert parsed.sensor_status == telemetry_pb.SENSOR_STATUS_OK
+
+
+def test_sdk_bundled_avro_matches_shared_source_of_truth():
+    """sdk/python ships a copy of telemetry_event.avsc — must stay byte-identical."""
+    sdk_avsc = (
+        ROOT
+        / "sdk"
+        / "python"
+        / "src"
+        / "argus_sdk"
+        / "data"
+        / "telemetry_event.avsc"
+    )
+    assert AVRO_PATH.is_file(), f"missing shared Avro schema: {AVRO_PATH}"
+    assert sdk_avsc.is_file(), f"missing SDK bundled Avro schema: {sdk_avsc}"
+    assert sdk_avsc.read_bytes() == AVRO_PATH.read_bytes(), (
+        "sdk/python/.../telemetry_event.avsc drifted from shared/avro/telemetry_event.avsc; "
+        "re-copy the shared schema into the SDK package data"
+    )
