@@ -35,6 +35,9 @@ jobs:
           #    env (SCHEMA_REGISTRY_URL, etc.), not request bodies.
           #
           # 2) yaml.github-actions.security.github-actions-mutable-action-tag
+          #      .github-actions-mutable-action-tag
+          #    Full rule id (must match Semgrep output exactly):
+          #    yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
           #    Fired on every `uses: actions/*@vN` / vendor@vN in our workflows
           #    (~40 findings). We intentionally track major tags for
           #    GitHub-owned and well-known actions (checkout, setup-*,
@@ -52,7 +55,7 @@ jobs:
             --error \
             --metrics off \
             --exclude-rule=python.lang.security.audit.dynamic-urllib-use-detected \
-            --exclude-rule=yaml.github-actions.security.github-actions-mutable-action-tag \
+            --exclude-rule=yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag \
             --exclude='shared/gen' \
             --exclude='**/.venv' \
             --exclude='**/node_modules' \
