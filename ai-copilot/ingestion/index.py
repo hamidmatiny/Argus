@@ -63,7 +63,7 @@ def main() -> int:
 
     settings = load_settings()
     embedder = Embedder(settings)
-    client = QdrantClient(url=settings.qdrant_url, check_compatibility=False)
+    client = QdrantClient(url=settings.qdrant_url)
 
     if args.recreate:
         for name in (settings.collection_runbooks, settings.collection_incidents):

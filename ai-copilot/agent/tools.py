@@ -27,7 +27,7 @@ class ToolBelt:
     def __init__(self, settings: Settings, embedder: Embedder) -> None:
         self.settings = settings
         self.embedder = embedder
-        self.qdrant = QdrantClient(url=settings.qdrant_url, check_compatibility=False)
+        self.qdrant = QdrantClient(url=settings.qdrant_url)
         self._http = httpx.Client(timeout=20.0)
 
     def close(self) -> None:
